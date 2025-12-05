@@ -29,7 +29,6 @@ import {
 export function HistoryPage() {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
-  const [timeFilter, setTimeFilter] = useState("all");
   const [academicYearFilter, setAcademicYearFilter] = useState("all");
   const [semesterFilter, setSemesterFilter] = useState("all");
 
@@ -59,20 +58,6 @@ export function HistoryPage() {
             f.name.toLowerCase().includes(searchTerm)
           ));
 
-      // Gunakan tanggal pengembalian jika ada, jika tidak gunakan tanggal selesai
-      const returnDate = loan.returnedAt
-        ? new Date(loan.returnedAt)
-        : new Date(loan.endDate);
-      const now = new Date();
-      const daysDiff = Math.floor(
-        (now.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      let matchesTime = true;
-      if (timeFilter === "7days") matchesTime = daysDiff <= 7;
-      if (timeFilter === "30days") matchesTime = daysDiff <= 30;
-      if (timeFilter === "90days") matchesTime = daysDiff <= 90;
-
       let matchesAcademicYear = true;
       if (academicYearFilter !== "all") {
         matchesAcademicYear = loan.academicYear === academicYearFilter;
@@ -87,11 +72,9 @@ export function HistoryPage() {
         matchesSemester = loanSemester === semesterFilter;
       }
 
-      return (
-        matchesSearch && matchesTime && matchesAcademicYear && matchesSemester
-      );
+      return matchesSearch && matchesAcademicYear && matchesSemester;
     });
-  }, [history, search, timeFilter, academicYearFilter, semesterFilter]);
+  }, [history, search, academicYearFilter, semesterFilter]);
 
   const getStatusBadge = (status) => {
     const variants = {

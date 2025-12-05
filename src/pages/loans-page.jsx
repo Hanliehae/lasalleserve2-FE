@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 
 import { getSemesterFromDate } from "../lib/mock-data.js";
 
@@ -13,9 +13,6 @@ import {
 
 import { useAuth } from "../context/auth-context.jsx";
 import { mockAssets, mockLoans, getAcademicYear } from "../lib/mock-data.js"; // TAMBAHKAN IMPORT getAcademicYear
-import { loanService } from "../lib/services/loanService";
-import { assetService } from "../lib/services/assetService";
-import { toast } from "sonner";
 
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
