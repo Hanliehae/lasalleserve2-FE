@@ -138,7 +138,7 @@ export function HistoryPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
@@ -150,7 +150,7 @@ export function HistoryPage() {
               <Search className="h-8 w-8 text-blue-500" />
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
 
         <Card>
           <CardContent className="pt-6">
@@ -202,7 +202,7 @@ export function HistoryPage() {
               />
             </div>
             <div className="flex gap-2">
-              <Select value={timeFilter} onValueChange={setTimeFilter}>
+              {/* <Select value={timeFilter} onValueChange={setTimeFilter}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Periode" />
                 </SelectTrigger>
@@ -212,7 +212,7 @@ export function HistoryPage() {
                   <SelectItem value="30days">30 Hari Terakhir</SelectItem>
                   <SelectItem value="90days">90 Hari Terakhir</SelectItem>
                 </SelectContent>
-              </Select>
+              </Select> */}
 
               <Select
                 value={academicYearFilter}

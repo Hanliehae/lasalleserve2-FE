@@ -298,7 +298,7 @@ function ReportsTable({
             <TableRow>
               <TableHead>Aset</TableHead>
               <TableHead>Pelapor</TableHead>
-              <TableHead>Deskripsi</TableHead>
+              {/* <TableHead>Deskripsi</TableHead> */}
               <TableHead>Prioritas</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Tanggal</TableHead>
@@ -316,9 +316,9 @@ function ReportsTable({
                   </div>
                 </TableCell>
                 <TableCell>{report.reporterName}</TableCell>
-                <TableCell>
+                {/* <TableCell>
                   <p className="max-w-xs truncate">{report.description}</p>
-                </TableCell>
+                </TableCell> */}
                 <TableCell>
                   {canEditPriority ? (
                     <Select
@@ -511,7 +511,7 @@ function ReportForm({ onSubmit, onCancel }) {
         />
       </div>
 
-      <div className="space-y-2">
+      {/* <div className="space-y-2">
         <Label>Prioritas</Label>
         <Select
           value={formData.priority}
@@ -530,7 +530,7 @@ function ReportForm({ onSubmit, onCancel }) {
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </div> */}
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
