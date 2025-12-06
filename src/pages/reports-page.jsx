@@ -40,6 +40,10 @@ import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/auth-context.jsx";
 import { mockDamageReports, mockAssets } from "../lib/mock-data.js";
 
+import { uploadService } from "../lib/services/uploadService";
+import { Upload, X } from "lucide-react";
+import { toast } from "sonner";
+
 const MANAGER_ROLES = ["staf_buf", "admin_buf", "kepala_buf"];
 const STATUS_OPTIONS = [
   { value: "menunggu", label: "Menunggu" },
@@ -74,12 +78,15 @@ export function ReportsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingReport, setEditingReport] = useState(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  // const [loading, setLoading] = useState(false);
 
-  const canManage = MANAGER_ROLES.includes(user?.role ?? "");
-  const canCreateReport = !["staf_buf", "admin_buf", "kepala_buf"].includes(
-    user?.role ?? ""
-  );
-  const canEditPriority = user?.role === "kepala_buf";
+  // Hanya staf biasa yang bisa membuat laporan
+  const canCreateReport = ![
+    "staf_buf",
+    "admin_buf",
+    "kepala_buf",
+    "admin",
+  ].includes(user?.role ?? "");
 
   const filteredReports = useMemo(() => {
     const keyword = searchTerm.toLowerCase();
@@ -160,7 +167,9 @@ export function ReportsPage() {
         <div>
           <h1>Laporan Kerusakan</h1>
           <p className="text-muted-foreground mt-2">
-            {canManage
+            {["staf_buf", "admin_buf", "kepala_buf", "admin"].includes(
+              user?.role ?? ""
+            )
               ? "Kelola laporan kerusakan aset"
               : "Lihat laporan kerusakan yang Anda laporkan"}
           </p>
@@ -221,8 +230,6 @@ export function ReportsPage() {
         <CardContent>
           <ReportsTable
             reports={filteredReports}
-            canManage={canManage}
-            canEditPriority={canEditPriority}
             onUpdateStatus={handleUpdateStatus}
             onUpdatePriority={handleUpdatePriority}
             onEditReport={handleEditReport}
@@ -248,7 +255,6 @@ export function ReportsPage() {
         </Dialog>
       )}
 
-      {/* Dialog Edit untuk Kepala BUF */}
       {editingReport && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl">
@@ -275,8 +281,6 @@ export function ReportsPage() {
 
 function ReportsTable({
   reports,
-  canManage,
-  canEditPriority,
   onUpdateStatus,
   onUpdatePriority,
   onEditReport,
@@ -290,6 +294,20 @@ function ReportsTable({
     );
   }
 
+  // Definisikan siapa yang bisa melihat detail
+  const canViewDetail = [
+    "admin",
+    "staf_buf",
+    "admin_buf",
+    "kepala_buf",
+  ].includes(userRole);
+
+  // Hanya kepala_buf yang bisa mengedit prioritas
+  const canEditPriority = userRole === "kepala_buf";
+
+  // Hanya kepala_buf yang bisa mengedit status
+  const canEditStatus = userRole === "kepala_buf";
+
   return (
     <div className="overflow-x-auto">
       <div className="rounded-md border">
@@ -298,11 +316,10 @@ function ReportsTable({
             <TableRow>
               <TableHead>Aset</TableHead>
               <TableHead>Pelapor</TableHead>
-              {/* <TableHead>Deskripsi</TableHead> */}
               <TableHead>Prioritas</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Tanggal</TableHead>
-              <TableHead>Detail</TableHead>
+              {canViewDetail && <TableHead>Detail</TableHead>}
               {userRole === "kepala_buf" && <TableHead>Aksi</TableHead>}
             </TableRow>
           </TableHeader>
@@ -316,9 +333,6 @@ function ReportsTable({
                   </div>
                 </TableCell>
                 <TableCell>{report.reporterName}</TableCell>
-                {/* <TableCell>
-                  <p className="max-w-xs truncate">{report.description}</p>
-                </TableCell> */}
                 <TableCell>
                   {canEditPriority ? (
                     <Select
@@ -343,7 +357,7 @@ function ReportsTable({
                   )}
                 </TableCell>
                 <TableCell>
-                  {canManage ? (
+                  {canEditStatus ? (
                     <Select
                       value={report.status}
                       onValueChange={(value) =>
@@ -368,9 +382,11 @@ function ReportsTable({
                 <TableCell>
                   {new Date(report.createdAt).toLocaleDateString("id-ID")}
                 </TableCell>
-                <TableCell>
-                  <ReportDetailDialog report={report} />
-                </TableCell>
+                {canViewDetail && (
+                  <TableCell>
+                    <ReportDetailDialog report={report} />
+                  </TableCell>
+                )}
                 {userRole === "kepala_buf" && (
                   <TableCell>
                     <Button
@@ -429,6 +445,7 @@ function ReportDetailDialog({ report }) {
             label="Tanggal Dilaporkan"
             value={new Date(report.createdAt).toLocaleDateString("id-ID")}
           />
+          a
           <DetailField
             label="Terakhir Diupdate"
             value={new Date(report.updatedAt).toLocaleDateString("id-ID")}
@@ -466,8 +483,47 @@ function ReportForm({ onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
     assetId: "",
     description: "",
-    priority: "sedang",
+    photoUrl: "",
   });
+
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState("");
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Preview gambar
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload ke server
+    try {
+      setUploading(true);
+      const result = await uploadService.uploadImage(file);
+
+      if (result.status === "success") {
+        setFormData((prev) => ({
+          ...prev,
+          photoUrl: result.data.url,
+        }));
+        toast.success("Gambar berhasil diunggah");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Gagal mengunggah gambar");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = () => {
+    setPreview("");
+    setFormData((prev) => ({ ...prev, photoUrl: "" }));
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -477,22 +533,72 @@ function ReportForm({ onSubmit, onCancel }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label>Aset</Label>
+        <Label>Nama Aset</Label>
+
+        <Input
+          value={formData.name}
+          onChange={(event) =>
+            setFormData({ ...formData, name: event.target.value })
+          }
+          placeholder="Contoh: Proyektor LCD 01"
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Kategori</Label>
         <Select
-          value={formData.assetId}
+          value={formData.category}
           onValueChange={(value) =>
-            setFormData((prev) => ({ ...prev, assetId: value }))
+            setFormData({ ...formData, category: value })
           }
         >
           <SelectTrigger>
-            <SelectValue placeholder="Pilih aset" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {mockAssets.map((asset) => (
-              <SelectItem key={asset.id} value={asset.id}>
-                {asset.name}
-              </SelectItem>
-            ))}
+            <SelectItem value="fasilitas">Fasilitas</SelectItem>
+            <SelectItem value="ruangan">Ruangan</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Lokasi</Label>
+        <Input
+          value={formData.location}
+          onChange={(event) =>
+            setFormData({ ...formData, location: event.target.value })
+          }
+          placeholder="Gedung Agustinus"
+          required="*"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Tahun Ajaran</Label>
+        <Input
+          value={formData.acquisitionYear}
+          onChange={(event) =>
+            setFormData({ ...formData, acquisitionYear: event.target.value })
+          }
+          placeholder="Contoh: 2024/2025"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Semester</Label>
+        <Select
+          value={formData.semester}
+          onValueChange={(value) =>
+            setFormData({ ...formData, semester: value })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Ganjil">Ganjil</SelectItem>
+            <SelectItem value="Genap">Genap</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -511,26 +617,52 @@ function ReportForm({ onSubmit, onCancel }) {
         />
       </div>
 
-      {/* <div className="space-y-2">
-        <Label>Prioritas</Label>
-        <Select
-          value={formData.priority}
-          onValueChange={(value) =>
-            setFormData((prev) => ({ ...prev, priority: value }))
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PRIORITY_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div> */}
+      {/* upload foto kerusakan (opsional) */}
+      <div className="space-y-2">
+        <Label>Foto Kerusakan (Opsional)</Label>
+
+        {!preview ? (
+          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+            <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
+            <div className="mt-4">
+              <Label
+                htmlFor="photo-upload"
+                className="cursor-pointer rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+              >
+                {uploading ? "Mengunggah..." : "Pilih Gambar"}
+              </Label>
+              <Input
+                id="photo-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+                disabled={uploading}
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                PNG, JPG, WebP maksimal 5MB
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="relative">
+            <img
+              src={preview}
+              alt="Preview"
+              className="w-full h-48 object-cover rounded-lg"
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="absolute top-2 right-2"
+              onClick={removeImage}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>

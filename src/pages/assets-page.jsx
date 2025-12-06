@@ -274,65 +274,88 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
               <TableHead>Nama Aset</TableHead>
               <TableHead>Kategori</TableHead>
               <TableHead>Lokasi</TableHead>
-              <TableHead>Stok Total</TableHead>
-              <TableHead>Tersedia</TableHead>
-              <TableHead>Kondisi</TableHead>
+              <TableHead>Total Stok</TableHead>
+              <TableHead>Tersedia (Baik)</TableHead>
+              <TableHead>Kondisi (Baik/Ringan/Berat)</TableHead>
               {canManage && <TableHead>Aksi</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {assets.map((asset) => (
-              <TableRow key={asset.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Package className="size-4 text-muted-foreground" />
-                    <div>
-                      <p>{asset.name}</p>
-                      {asset.description && (
-                        <p className="text-sm text-muted-foreground">
-                          {asset.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="capitalize">{asset.category}</TableCell>
-                <TableCell>{asset.location}</TableCell>
-                <TableCell>{asset.totalStock}</TableCell>
-                <TableCell>
-                  <span
-                    className={
-                      asset.availableStock === 0 ? "text-red-600" : undefined
-                    }
-                  >
-                    {asset.availableStock}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <AssetConditionBadge value={asset.condition} />
-                </TableCell>
-                {canManage && (
+            {assets.map((asset) => {
+              // Hitung jumlah per kondisi
+              const conditions = asset.conditions || [];
+              const baik =
+                conditions.find((c) => c.condition === "baik")?.quantity || 0;
+              const rusakRingan =
+                conditions.find((c) => c.condition === "rusak_ringan")
+                  ?.quantity || 0;
+              const rusakBerat =
+                conditions.find((c) => c.condition === "rusak_berat")
+                  ?.quantity || 0;
+
+              return (
+                <TableRow key={asset.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onEdit(asset)}
-                      >
-                        <Edit className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDelete(asset.id)}
-                      >
-                        <Trash2 className="size-4 text-destructive" />
-                      </Button>
+                      <Package className="size-4 text-muted-foreground" />
+                      <div>
+                        <p>{asset.name}</p>
+                        {asset.description && (
+                          <p className="text-sm text-muted-foreground">
+                            {asset.description}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
-                )}
-              </TableRow>
-            ))}
+                  <TableCell className="capitalize">{asset.category}</TableCell>
+                  <TableCell>{asset.location}</TableCell>
+                  <TableCell>{asset.totalStock}</TableCell>
+                  <TableCell>
+                    <span
+                      className={
+                        asset.availableStock === 0 ? "text-red-600" : undefined
+                      }
+                    >
+                      {asset.availableStock}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Badge variant="default" className="text-xs">
+                        Baik: {baik}
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        Ringan: {rusakRingan}
+                      </Badge>
+                      <Badge variant="destructive" className="text-xs">
+                        Berat: {rusakBerat}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  {canManage && (
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEdit(asset)}
+                        >
+                          <Edit className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onDelete(asset.id)}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -340,43 +363,64 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
   );
 }
 
-function AssetConditionBadge({ value }) {
-  const variants = {
-    baik: "default",
-    rusak_ringan: "secondary",
-    rusak_berat: "destructive",
-  };
-
-  return <Badge variant={variants[value]}>{value.replace("_", " ")}</Badge>;
-}
-
 function AssetForm({ initialData, onSubmit, onCancel }) {
+  // Inisialisasi conditions
+  const initialConditions = initialData?.conditions || [
+    { condition: "baik", quantity: 0 },
+    { condition: "rusak_ringan", quantity: 0 },
+    { condition: "rusak_berat", quantity: 0 },
+  ];
+
   const [formData, setFormData] = useState(
-    initialData ?? {
-      name: "",
-      category: "fasilitas",
-      location: "",
-      totalStock: 0,
-      availableStock: 0,
-      condition: "baik",
-      description: "",
-    }
+    initialData
+      ? {
+          ...initialData,
+          conditions: initialConditions,
+        }
+      : {
+          name: "",
+          category: "fasilitas",
+          location: "",
+          description: "",
+          acquisitionYear: new Date().getFullYear().toString(),
+          conditions: initialConditions,
+        }
   );
+
+  const handleConditionChange = (condition, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      conditions: prev.conditions.map((cond) =>
+        cond.condition === condition
+          ? { ...cond, quantity: parseInt(value) || 0 }
+          : cond
+      ),
+    }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit(formData);
   };
 
+  // Hitung total stok
+  const totalStock = formData.conditions.reduce(
+    (sum, cond) => sum + cond.quantity,
+    0
+  );
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label>Nama Aset</Label>
+
         <Input
           value={formData.name}
           onChange={(event) =>
             setFormData({ ...formData, name: event.target.value })
           }
+          placeholder="Contoh: Proyektor LCD 01"
+          required
         />
       </div>
       <div className="space-y-2">
@@ -404,55 +448,69 @@ function AssetForm({ initialData, onSubmit, onCancel }) {
           onChange={(event) =>
             setFormData({ ...formData, location: event.target.value })
           }
+          placeholder="Gedung Agustinus"
+          required="*"
         />
       </div>
 
-      <div className="flex gap-2">
-        <div className="flex-1 space-y-2">
-          <Label>Total Stok</Label>
-          <Input
-            type="number"
-            value={formData.totalStock}
-            onChange={(event) =>
-              setFormData({
-                ...formData,
-                totalStock: Number(event.target.value),
-              })
-            }
-          />
-        </div>
-        <div className="flex-1 space-y-2">
-          <Label>Stok Tersedia</Label>
-          <Input
-            type="number"
-            value={formData.availableStock}
-            onChange={(event) =>
-              setFormData({
-                ...formData,
-                availableStock: Number(event.target.value),
-              })
-            }
-          />
-        </div>
+      <div className="space-y-2">
+        <Label>Tahun Ajaran</Label>
+        <Input
+          value={formData.acquisitionYear}
+          onChange={(event) =>
+            setFormData({ ...formData, acquisitionYear: event.target.value })
+          }
+          placeholder="Contoh: 2024/2025"
+        />
       </div>
 
       <div className="space-y-2">
-        <Label>Kondisi</Label>
+        <Label>Semester</Label>
         <Select
-          value={formData.condition}
+          value={formData.semester}
           onValueChange={(value) =>
-            setFormData({ ...formData, condition: value })
+            setFormData({ ...formData, semester: value })
           }
         >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="baik">Baik</SelectItem>
-            <SelectItem value="rusak_ringan">Rusak Ringan</SelectItem>
-            <SelectItem value="rusak_berat">Rusak Berat</SelectItem>
+            <SelectItem value="Ganjil">Ganjil</SelectItem>
+            <SelectItem value="Genap">Genap</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="space-y-4">
+        <Label>Kondisi dan Jumlah</Label>
+
+        {formData.conditions.map((cond) => (
+          <div key={cond.condition} className="flex items-center gap-4">
+            <div className="w-32">
+              <span className="capitalize">
+                {cond.condition.replace("_", " ")}
+              </span>
+            </div>
+            <Input
+              type="number"
+              min="0"
+              value={cond.quantity}
+              onChange={(e) =>
+                handleConditionChange(cond.condition, e.target.value)
+              }
+              className="flex-1"
+            />
+            <span className="text-sm text-muted-foreground">unit</span>
+          </div>
+        ))}
+
+        <div className="pt-4 border-t">
+          <div className="flex justify-between items-center">
+            <span className="font-medium">Total Stok:</span>
+            <span className="text-2xl font-bold">{totalStock}</span>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2">

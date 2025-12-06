@@ -17,10 +17,23 @@ export const loanService = {
   },
 
   async createLoan(loanData) {
-    const response = await api.post('/loans', loanData);
-    return response.data;
+    try {
+      const response = await api.post('/loans', loanData);
+      return response.data;
+    } catch (error) {
+      // Extract error message from response
+      const errorMessage = error.response?.data?.message || 
+                          "Gagal membuat peminjaman. Periksa ketersediaan stok.";
+      
+      // Enhanced error for stock issues
+      if (errorMessage.toLowerCase().includes('stok') || 
+          errorMessage.toLowerCase().includes('tidak mencukupi')) {
+        throw new Error(`❌ ${errorMessage}. Silakan kurangi jumlah atau pilih aset lain.`);
+      }
+      
+      throw new Error(errorMessage);
+    }
   },
-
   async updateLoanStatus(id, status) {
     const response = await api.patch(`/loans/${id}/status`, { status });
     return response.data;
