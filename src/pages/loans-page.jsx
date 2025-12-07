@@ -58,6 +58,10 @@ const STATUS_BADGES = {
   disetujui: { variant: "default", label: "Disetujui" },
   ditolak: { variant: "destructive", label: "Ditolak" },
   selesai: { variant: "outline", label: "Selesai" },
+  menunggu_pengembalian: {
+    variant: "secondary",
+    label: "Menunggu Pengembalian",
+  },
 };
 
 export function LoansPage() {
@@ -71,6 +75,7 @@ export function LoansPage() {
   const [isFacilityFormOpen, setIsFacilityFormOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [updatingLoanId, setUpdatingLoanId] = useState(null);
 
   const canApprove = APPROVER_ROLES.includes(user?.role ?? "");
   const canCreateLoan = CREATOR_ROLES.includes(user?.role ?? "");
@@ -116,7 +121,7 @@ export function LoansPage() {
 
   const handleStatusChange = (value) => {
     setStatusFilter(value);
-    fetchLoans(); // Refetch dengan filter baru
+    fetchLoans();
   };
 
   const handleCreateLoan = async (payload) => {
@@ -128,7 +133,7 @@ export function LoansPage() {
 
       if (result.status === "success") {
         toast.success("Peminjaman berhasil diajukan");
-        fetchLoans(); // Refresh data
+        fetchLoans();
         return true;
       } else {
         toast.error(result.message || "Gagal mengajukan peminjaman");
@@ -143,19 +148,31 @@ export function LoansPage() {
     }
   };
 
-  const updateLoanStatus = async (id, status) => {
+  const updateLoanStatus = async (id, status, notes = "") => {
     try {
-      const result = await loanService.updateLoanStatus(id, status);
+      setUpdatingLoanId(id);
+      console.log(
+        `🔄 Updating loan ${id} status to ${status}`,
+        notes ? `with notes: ${notes}` : ""
+      );
+
+      const result = await loanService.updateLoanStatus(id, status, notes);
 
       if (result.status === "success") {
-        toast.success(`Status peminjaman berhasil diubah menjadi ${status}`);
-        fetchLoans(); // Refresh data
+        toast.success(
+          `Status peminjaman berhasil diubah menjadi ${
+            status === "disetujui" ? "Disetujui" : "Ditolak"
+          }`
+        );
+        fetchLoans();
       } else {
-        toast.error(result.message || "Gagal mengubah status");
+        toast.error(result.message || "Gagal mengubah status peminjaman");
       }
     } catch (error) {
       console.error("Error updating loan status:", error);
-      toast.error(error.message || "Terjadi kesalahan");
+      toast.error(error.message || "Terjadi kesalahan saat mengubah status");
+    } finally {
+      setUpdatingLoanId(null);
     }
   };
 
@@ -167,7 +184,7 @@ export function LoansPage() {
 
       if (result.status === "success") {
         toast.success("Peminjaman berhasil dihapus");
-        fetchLoans(); // Refresh data
+        fetchLoans();
       } else {
         toast.error(result.message || "Gagal menghapus peminjaman");
       }
@@ -305,6 +322,9 @@ export function LoansPage() {
                 <SelectItem value="disetujui">Disetujui</SelectItem>
                 <SelectItem value="ditolak">Ditolak</SelectItem>
                 <SelectItem value="selesai">Selesai</SelectItem>
+                <SelectItem value="menunggu_pengembalian">
+                  Menunggu Pengembalian
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -365,35 +385,75 @@ export function LoansPage() {
                         <LoanDate value={loan.endDate} time={loan.endTime} />
                       </TableCell>
                       <TableCell>{renderStatusBadge(loan.status)}</TableCell>
-                      {canApprove && loan.status === "menunggu" && (
+                      {canApprove && (
                         <TableCell>
                           <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                updateLoanStatus(loan.id, "disetujui")
-                              }
-                            >
-                              <CheckCircle className="mr-1 size-4 text-green-600" />
-                              Setuju
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                updateLoanStatus(loan.id, "ditolak")
-                              }
-                            >
-                              <XCircle className="mr-1 size-4 text-red-600" />
-                              Tolak
-                            </Button>
+                            {loan.status === "menunggu" && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const notes = prompt(
+                                      "Masukkan catatan persetujuan (opsional):",
+                                      ""
+                                    );
+                                    if (notes !== null) {
+                                      updateLoanStatus(
+                                        loan.id,
+                                        "disetujui",
+                                        notes
+                                      );
+                                    }
+                                  }}
+                                  disabled={updatingLoanId === loan.id}
+                                >
+                                  {updatingLoanId === loan.id ? (
+                                    <Loader2 className="mr-1 size-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="mr-1 size-4 text-green-600" />
+                                  )}
+                                  {updatingLoanId === loan.id
+                                    ? "Memproses..."
+                                    : "Setuju"}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const notes = prompt(
+                                      "Masukkan alasan penolakan:",
+                                      ""
+                                    );
+                                    if (notes !== null) {
+                                      updateLoanStatus(
+                                        loan.id,
+                                        "ditolak",
+                                        notes
+                                      );
+                                    }
+                                  }}
+                                  disabled={updatingLoanId === loan.id}
+                                >
+                                  {updatingLoanId === loan.id ? (
+                                    <Loader2 className="mr-1 size-4 animate-spin" />
+                                  ) : (
+                                    <XCircle className="mr-1 size-4 text-red-600" />
+                                  )}
+                                  {updatingLoanId === loan.id
+                                    ? "Memproses..."
+                                    : "Tolak"}
+                                </Button>
+                              </>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => deleteLoan(loan.id)}
+                              disabled={updatingLoanId === loan.id}
                             >
                               <Trash2 className="mr-1 size-4 text-gray-600" />
+                              Hapus
                             </Button>
                           </div>
                         </TableCell>
@@ -410,6 +470,7 @@ export function LoansPage() {
   );
 }
 
+// Komponen untuk menampilkan detail aset dalam tabel
 function LoanAssetDetails({ loan }) {
   return (
     <div className="space-y-1">
@@ -435,6 +496,7 @@ function LoanAssetDetails({ loan }) {
   );
 }
 
+// Komponen untuk menampilkan tanggal
 function LoanDate({ value, time }) {
   if (!value) return null;
 
@@ -449,24 +511,7 @@ function LoanDate({ value, time }) {
   );
 }
 
-// Helper function untuk academic year
-const getAcademicYear = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1;
-
-  if (month >= 7) {
-    return `${year}/${year + 1}`;
-  } else {
-    return `${year - 1}/${year}`;
-  }
-};
-
-const getSemesterFromDate = (date = new Date()) => {
-  const month = date.getMonth() + 1;
-  return month >= 7 ? "ganjil" : "genap";
-};
-
-// Form ajukan pinjam ruangan
+// Form untuk peminjaman ruangan
 function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
@@ -478,8 +523,8 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
     endTime: "17:00",
     purpose: "",
     facilities: [],
-    academicYear: getAcademicYear(),
-    semester: getSemesterFromDate(new Date()),
+    academicYear: loanService.getAcademicYear(),
+    semester: loanService.getSemesterFromDate(new Date()),
   });
   const [facilitySearch, setFacilitySearch] = useState("");
   const [errors, setErrors] = useState({});
@@ -528,9 +573,23 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
       return;
     }
 
-    const success = await onSubmit(formData);
+    const payload = {
+      roomId: formData.roomId,
+      facilities: formData.facilities.map((f) => ({
+        id: f.id,
+        quantity: f.quantity,
+      })),
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      purpose: formData.purpose,
+      academicYear: formData.academicYear,
+      semester: formData.semester,
+    };
+
+    const success = await onSubmit(payload);
     if (success) {
-      // Reset form
       setFormData({
         roomId: "",
         roomName: "",
@@ -540,8 +599,8 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
         endTime: "17:00",
         purpose: "",
         facilities: [],
-        academicYear: getAcademicYear(),
-        semester: getSemesterFromDate(new Date()),
+        academicYear: loanService.getAcademicYear(),
+        semester: loanService.getSemesterFromDate(new Date()),
       });
       setErrors({});
     }
@@ -813,7 +872,7 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
   );
 }
 
-// Form ajukan pinjam fasilitas (similar pattern)
+// Form untuk peminjaman fasilitas
 function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
   const [formData, setFormData] = useState({
     startDate: new Date().toISOString().split("T")[0],
@@ -822,499 +881,323 @@ function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
     endTime: "17:00",
     purpose: "",
     facilities: [],
-    academicYear: getAcademicYear(),
-    semester: getSemesterFromDate(new Date()),
+    academicYear: loanService.getAcademicYear(),
+    semester: loanService.getSemesterFromDate(new Date()),
   });
 
   const [facilitySearch, setFacilitySearch] = useState("");
   const [errors, setErrors] = useState({});
 
-  // Form ajukan pinjam ruangan
-  function RoomLoanForm({ onSubmit, onCancel }) {
-    const [formData, setFormData] = useState({
-      location: "",
-      roomId: "",
-      roomName: "",
-      startDate: "",
-      startTime: "08:00",
-      endDate: "",
-      endTime: "17:00",
-      purpose: "",
-      facilities: [],
-      academicYear: academicYearFunction(),
-      semester: getSemesterFromDate(new Date()),
-    });
-    const [facilitySearch, setFacilitySearch] = useState("");
+  const availableFacilities = useMemo(() => {
+    return assets.filter(
+      (asset) =>
+        asset.category === "fasilitas" &&
+        asset.availableStock > 0 &&
+        asset.name.toLowerCase().includes(facilitySearch.toLowerCase())
+    );
+  }, [assets, facilitySearch]);
 
-    const roomLocations = useMemo(() => {
-      const rooms = mockAssets.filter((asset) => asset.category === "ruangan");
-      return Array.from(new Set(rooms.map((room) => room.location))).sort();
-    }, []);
+  const validateForm = () => {
+    const newErrors = {};
 
-    const availableRooms = useMemo(() => {
-      return mockAssets.filter(
-        (asset) =>
-          asset.category === "ruangan" &&
-          (formData.location ? asset.location === formData.location : true)
-      );
-    }, [formData.location]);
+    if (!formData.startDate) newErrors.startDate = "Tanggal mulai harus diisi";
+    if (!formData.endDate) newErrors.endDate = "Tanggal selesai harus diisi";
 
-    const availableFacilities = useMemo(() => {
-      return mockAssets.filter(
-        (asset) =>
-          asset.category === "fasilitas" &&
-          asset.name.toLowerCase().includes(facilitySearch.toLowerCase())
-      );
-    }, [facilitySearch]);
+    if (formData.startDate && formData.endDate) {
+      const start = new Date(formData.startDate);
+      const end = new Date(formData.endDate);
+      if (end < start) {
+        newErrors.date = "Tanggal selesai tidak boleh sebelum tanggal mulai";
+      }
+    }
 
-    const handleFieldChange = (field, value) => {
-      setFormData((prev) => ({ ...prev, [field]: value }));
+    if (!formData.purpose.trim()) newErrors.purpose = "Keperluan harus diisi";
+
+    if (formData.facilities.length === 0) {
+      newErrors.facilities = "Minimal pilih satu fasilitas";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!validateForm()) {
+      toast.error("Harap perbaiki error di form");
+      return;
+    }
+
+    const payload = {
+      roomId: null,
+      facilities: formData.facilities.map((f) => ({
+        id: f.id,
+        quantity: f.quantity,
+      })),
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      purpose: formData.purpose,
+      academicYear: formData.academicYear,
+      semester: formData.semester,
     };
 
-    const handleRoomChange = (roomId) => {
-      const selectedRoom = availableRooms.find((room) => room.id === roomId);
-      setFormData((prev) => ({
-        ...prev,
-        roomId,
-        roomName: selectedRoom?.name ?? "",
-      }));
-    };
+    const success = await onSubmit(payload);
+    if (success) {
+      setFormData({
+        startDate: new Date().toISOString().split("T")[0],
+        startTime: "08:00",
+        endDate: new Date().toISOString().split("T")[0],
+        endTime: "17:00",
+        purpose: "",
+        facilities: [],
+        academicYear: loanService.getAcademicYear(),
+        semester: loanService.getSemesterFromDate(new Date()),
+      });
+      setErrors({});
+    }
+  };
 
-    const handleSubmit = (event) => {
-      event.preventDefault();
-      onSubmit(formData);
-    };
+  const handleFieldChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
+  };
 
-    const addFacility = (facility) => {
-      setFormData((prev) => {
-        if (prev.facilities.some((item) => item.id === facility.id)) {
+  const addFacility = (facility) => {
+    // Check stock availability
+    if (facility.availableStock <= 0) {
+      toast.error(`Stok ${facility.name} tidak tersedia`);
+      return;
+    }
+
+    setFormData((prev) => {
+      const existing = prev.facilities.find((item) => item.id === facility.id);
+
+      if (existing) {
+        // If already exists, increase quantity if stock allows
+        const newQuantity = existing.quantity + 1;
+        if (newQuantity > facility.availableStock) {
+          toast.error(`Stok ${facility.name} tidak mencukupi`);
           return prev;
         }
 
         return {
           ...prev,
-          facilities: [
-            ...prev.facilities,
-            { id: facility.id, name: facility.name, quantity: 1 },
-          ],
+          facilities: prev.facilities.map((item) =>
+            item.id === facility.id ? { ...item, quantity: newQuantity } : item
+          ),
         };
-      });
-      setFacilitySearch("");
-    };
+      }
 
-    const removeFacility = (facilityId) => {
-      setFormData((prev) => ({
+      // Add new facility
+      return {
         ...prev,
-        facilities: prev.facilities.filter((item) => item.id !== facilityId),
-      }));
-    };
+        facilities: [
+          ...prev.facilities,
+          { id: facility.id, name: facility.name, quantity: 1 },
+        ],
+      };
+    });
+    setFacilitySearch("");
+  };
 
-    const updateFacilityQuantity = (facilityId, quantity) => {
-      setFormData((prev) => ({
-        ...prev,
-        facilities: prev.facilities.map((item) =>
-          item.id === facilityId
-            ? { ...item, quantity: Math.max(1, Number(quantity) || 1) }
-            : item
-        ),
-      }));
-    };
+  const removeFacility = (facilityId) => {
+    setFormData((prev) => ({
+      ...prev,
+      facilities: prev.facilities.filter((item) => item.id !== facilityId),
+    }));
+  };
 
-    return (
-      <form onSubmit={handleSubmit} className="space-y-6">
+  const updateFacilityQuantity = (facilityId, quantity) => {
+    const facility = assets.find((a) => a.id === facilityId);
+    const parsedQuantity = parseInt(quantity) || 1;
+
+    if (facility && parsedQuantity > facility.availableStock) {
+      toast.error(`Stok ${facility.name} tidak mencukupi`);
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      facilities: prev.facilities.map((item) =>
+        item.id === facilityId
+          ? { ...item, quantity: Math.max(1, parsedQuantity) }
+          : item
+      ),
+    }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>Lokasi Gedung</Label>
-          <Select
-            value={formData.location}
-            onValueChange={(value) => {
-              handleFieldChange("location", value);
-              handleRoomChange("");
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Pilih lokasi gedung" />
-            </SelectTrigger>
-            <SelectContent>
-              {roomLocations.map((location) => (
-                <SelectItem key={location} value={location}>
-                  {location}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Ruangan</Label>
-          <Select value={formData.roomId} onValueChange={handleRoomChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Pilih ruangan" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableRooms.map((room) => (
-                <SelectItem key={room.id} value={room.id}>
-                  {room.name} ({room.location})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Tanggal Mulai</Label>
-            <Input
-              type="date"
-              value={formData.startDate}
-              onChange={(event) =>
-                handleFieldChange("startDate", event.target.value)
-              }
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Waktu Mulai</Label>
-            <Input
-              type="time"
-              value={formData.startTime}
-              onChange={(event) =>
-                handleFieldChange("startTime", event.target.value)
-              }
-              required
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Tanggal Selesai</Label>
-            <Input
-              type="date"
-              value={formData.endDate}
-              onChange={(event) =>
-                handleFieldChange("endDate", event.target.value)
-              }
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Waktu Selesai</Label>
-            <Input
-              type="time"
-              value={formData.endTime}
-              onChange={(event) =>
-                handleFieldChange("endTime", event.target.value)
-              }
-              required
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Keperluan Peminjaman</Label>
-          <Textarea
-            placeholder="Tuliskan keperluan peminjaman ruangan"
-            value={formData.purpose}
+          <Label>Tanggal Mulai *</Label>
+          <Input
+            type="date"
+            value={formData.startDate}
             onChange={(event) =>
-              handleFieldChange("purpose", event.target.value)
+              handleFieldChange("startDate", event.target.value)
             }
-            rows={3}
+            className={errors.startDate ? "border-red-500" : ""}
+            min={new Date().toISOString().split("T")[0]}
           />
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <Label>Cari Fasilitas Tambahan</Label>
-            <Input
-              placeholder="Cari fasilitas..."
-              value={facilitySearch}
-              onChange={(event) => setFacilitySearch(event.target.value)}
-            />
-          </div>
-
-          <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
-            {availableFacilities.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Fasilitas tidak ditemukan.
-              </p>
-            )}
-
-            {availableFacilities.map((facility) => (
-              <div
-                key={facility.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2"
-              >
-                <div>
-                  <p className="font-medium">{facility.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Lokasi: {facility.location}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => addFacility(facility)}
-                >
-                  Tambahkan
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          {formData.facilities.length > 0 && (
-            <div className="space-y-2">
-              <Label>Fasilitas Terpilih</Label>
-              <div className="space-y-2 rounded-md border p-3">
-                {formData.facilities.map((facility) => (
-                  <div
-                    key={facility.id}
-                    className="flex flex-wrap items-center gap-3 rounded-md bg-muted/40 p-3"
-                  >
-                    <div className="flex-grow">
-                      <p className="font-medium">{facility.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Kode: {facility.id}
-                      </p>
-                    </div>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={facility.quantity}
-                      onChange={(event) =>
-                        updateFacilityQuantity(facility.id, event.target.value)
-                      }
-                      className="w-20"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeFacility(facility.id)}
-                    >
-                      <Trash2 className="size-4 text-red-500" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {errors.startDate && (
+            <p className="text-sm text-red-500">{errors.startDate}</p>
           )}
         </div>
-
-        <div className="flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Batal
-          </Button>
-          <Button type="submit">Ajukan</Button>
-        </div>
-      </form>
-    );
-  }
-
-  // Form ajukan pinjam fasilitas
-  function FacilityLoanForm({ onSubmit, onCancel }) {
-    const [formData, setFormData] = useState({
-      startDate: "",
-      startTime: "08:00",
-      endDate: "",
-      endTime: "17:00",
-      purpose: "",
-      facilities: [],
-      academicYear: academicYearFunction(),
-      semester: getSemesterFromDate(new Date()),
-    });
-
-    const [facilitySearch, setFacilitySearch] = useState("");
-
-    // Ambil hanya fasilitas
-    const availableFacilities = useMemo(() => {
-      return mockAssets.filter(
-        (asset) =>
-          asset.category === "fasilitas" &&
-          asset.name.toLowerCase().includes(facilitySearch.toLowerCase())
-      );
-    }, [facilitySearch]);
-
-    const handleFieldChange = (field, value) => {
-      setFormData((prev) => ({ ...prev, [field]: value }));
-    };
-
-    const addFacility = (facility) => {
-      setFormData((prev) => {
-        if (prev.facilities.some((item) => item.id === facility.id))
-          return prev;
-
-        return {
-          ...prev,
-          facilities: [
-            ...prev.facilities,
-            { id: facility.id, name: facility.name, quantity: 1 },
-          ],
-        };
-      });
-    };
-
-    const updateFacilityQuantity = (id, quantity) => {
-      setFormData((prev) => ({
-        ...prev,
-        facilities: prev.facilities.map((item) =>
-          item.id === id
-            ? { ...item, quantity: Math.max(1, Number(quantity)) }
-            : item
-        ),
-      }));
-    };
-
-    const removeFacility = (id) => {
-      setFormData((prev) => ({
-        ...prev,
-        facilities: prev.facilities.filter((item) => item.id !== id),
-      }));
-    };
-
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      onSubmit(formData);
-    };
-
-    return (
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Tanggal Mulai</Label>
-            <Input
-              type="date"
-              value={formData.startDate}
-              onChange={(event) =>
-                handleFieldChange("startDate", event.target.value)
-              }
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Waktu Mulai</Label>
-            <Input
-              type="time"
-              value={formData.startTime}
-              onChange={(event) =>
-                handleFieldChange("startTime", event.target.value)
-              }
-              required
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Tanggal Selesai</Label>
-            <Input
-              type="date"
-              value={formData.endDate}
-              onChange={(event) =>
-                handleFieldChange("endDate", event.target.value)
-              }
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Waktu Selesai</Label>
-            <Input
-              type="time"
-              value={formData.endTime}
-              onChange={(event) =>
-                handleFieldChange("endTime", event.target.value)
-              }
-              required
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label>Keperluan Peminjaman</Label>
-          <Textarea
-            rows={3}
-            placeholder="Tuliskan keperluan peminjaman fasilitas"
-            value={formData.purpose}
-            onChange={(e) => handleFieldChange("purpose", e.target.value)}
-          />
-        </div>
-
-        <div className="space-y-3">
-          <Label>Cari Fasilitas</Label>
+        <div className="space-y-2">
+          <Label>Waktu Mulai</Label>
           <Input
-            placeholder="Cari fasilitas..."
-            value={facilitySearch}
-            onChange={(e) => setFacilitySearch(e.target.value)}
+            type="time"
+            value={formData.startTime}
+            onChange={(event) =>
+              handleFieldChange("startTime", event.target.value)
+            }
           />
+        </div>
+      </div>
 
-          <div className="max-h-40 overflow-y-auto border rounded-md p-3 space-y-2">
-            {availableFacilities.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Fasilitas tidak ditemukan.
-              </p>
-            )}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Tanggal Selesai *</Label>
+          <Input
+            type="date"
+            value={formData.endDate}
+            onChange={(event) =>
+              handleFieldChange("endDate", event.target.value)
+            }
+            className={errors.endDate ? "border-red-500" : ""}
+            min={formData.startDate}
+          />
+          {errors.endDate && (
+            <p className="text-sm text-red-500">{errors.endDate}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label>Waktu Selesai</Label>
+          <Input
+            type="time"
+            value={formData.endTime}
+            onChange={(event) =>
+              handleFieldChange("endTime", event.target.value)
+            }
+          />
+        </div>
+      </div>
 
-            {availableFacilities.map((f) => (
-              <div
-                key={f.id}
-                className="flex items-center justify-between border rounded-md px-3 py-2"
-              >
-                <div>
-                  <p className="font-medium">{f.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Lokasi: {f.location}
-                  </p>
-                </div>
-                <Button variant="ghost" onClick={() => addFacility(f)}>
-                  Tambahkan
-                </Button>
+      {errors.date && <p className="text-sm text-red-500">{errors.date}</p>}
+
+      <div className="space-y-2">
+        <Label>Keperluan Peminjaman *</Label>
+        <Textarea
+          placeholder="Tuliskan keperluan peminjaman fasilitas"
+          value={formData.purpose}
+          onChange={(event) => handleFieldChange("purpose", event.target.value)}
+          rows={3}
+          className={errors.purpose ? "border-red-500" : ""}
+        />
+        {errors.purpose && (
+          <p className="text-sm text-red-500">{errors.purpose}</p>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <Label>Cari Fasilitas *</Label>
+        <Input
+          placeholder="Cari fasilitas..."
+          value={facilitySearch}
+          onChange={(event) => setFacilitySearch(event.target.value)}
+        />
+
+        <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
+          {availableFacilities.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Fasilitas tidak ditemukan.
+            </p>
+          )}
+
+          {availableFacilities.map((facility) => (
+            <div
+              key={facility.id}
+              className="flex items-center justify-between rounded-md border px-3 py-2"
+            >
+              <div>
+                <p className="font-medium">{facility.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  Stok tersedia: {facility.availableStock} | Lokasi:{" "}
+                  {facility.location}
+                </p>
               </div>
-            ))}
-          </div>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => addFacility(facility)}
+              >
+                Tambahkan
+              </Button>
+            </div>
+          ))}
+        </div>
 
-          {formData.facilities.length > 0 && (
-            <div className="border rounded-md p-3 space-y-2">
-              <Label>Fasilitas Terpilih</Label>
-
-              {formData.facilities.map((f) => (
+        {formData.facilities.length > 0 && (
+          <div className="space-y-2">
+            <Label>Fasilitas Terpilih</Label>
+            <div className="space-y-2 rounded-md border p-3">
+              {formData.facilities.map((facility) => (
                 <div
-                  key={f.id}
-                  className="flex items-center gap-3 bg-muted/40 rounded-md p-3"
+                  key={facility.id}
+                  className="flex flex-wrap items-center gap-3 rounded-md bg-muted/40 p-3"
                 >
                   <div className="flex-grow">
-                    <p className="font-medium">{f.name}</p>
-                    <p className="text-xs text-muted-foreground">ID: {f.id}</p>
+                    <p className="font-medium">{facility.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Kode: {facility.id}
+                    </p>
                   </div>
-
                   <Input
                     type="number"
                     min={1}
-                    value={f.quantity}
-                    onChange={(e) =>
-                      updateFacilityQuantity(f.id, e.target.value)
+                    value={facility.quantity}
+                    onChange={(event) =>
+                      updateFacilityQuantity(facility.id, event.target.value)
                     }
                     className="w-20"
                   />
-
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => removeFacility(f.id)}
+                    onClick={() => removeFacility(facility.id)}
                   >
                     <Trash2 className="size-4 text-red-500" />
                   </Button>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+        {errors.facilities && (
+          <p className="text-sm text-red-500">{errors.facilities}</p>
+        )}
+      </div>
 
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" type="button" onClick={onCancel}>
-            Batal
-          </Button>
-          <Button type="submit">Ajukan</Button>
-        </div>
-      </form>
-    );
-  }
+      <div className="flex justify-end gap-3 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Batal
+        </Button>
+        <Button type="submit" disabled={submitting}>
+          {submitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Mengajukan...
+            </>
+          ) : (
+            "Ajukan Peminjaman"
+          )}
+        </Button>
+      </div>
+    </form>
+  );
 }

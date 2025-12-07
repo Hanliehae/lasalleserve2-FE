@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   AlertTriangle,
-  Edit,
-  Eye,
   Calendar,
   Package,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -37,16 +36,9 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Label } from "../components/ui/label";
-
 import { useAuth } from "../context/auth-context.jsx";
-import {
-  mockDamageReports,
-  mockAssets,
-  getAcademicYearOptions,
-  getAcademicYear,
-  getSemesterOptions,
-  getSemesterFromDate,
-} from "../lib/mock-data.js";
+import { reportService } from "../lib/services/reportService";
+import { toast } from "sonner";
 
 const PERIOD_OPTIONS = [
   { value: "7", label: "7 Hari Terakhir" },
@@ -60,74 +52,91 @@ const STAT_CARDS = [
     key: "total",
     title: "Total Laporan",
     icon: AlertTriangle,
-    getValue: (reports) => reports.length,
     description: (period) => `Dalam ${period} hari terakhir`,
   },
   {
     key: "priority",
     title: "Prioritas Tinggi",
     icon: TrendingUp,
-    getValue: (_, priorityStats) => priorityStats.tinggi,
     description: () => "Memerlukan perhatian segera",
   },
   {
     key: "menunggu",
     title: "Menunggu",
     icon: Calendar,
-    getValue: (_, __, statusStats) => statusStats.menunggu,
     description: () => "Belum ditangani",
   },
   {
     key: "selesai",
     title: "Selesai",
     icon: Package,
-    getValue: (_, __, statusStats) => statusStats.selesai,
     description: () => "Sudah diperbaiki",
   },
 ];
-
-// Tambahkan fungsi untuk mendapatkan tahun ajaran dari tanggal
-const getAcademicYearFromDate = (dateString) => {
-  const date = new Date(dateString);
-  return getAcademicYear(date);
-};
 
 export function DamageHistoryPage() {
   const { user } = useAuth();
   const [timePeriod, setTimePeriod] = useState("30");
   const [academicYearFilter, setAcademicYearFilter] = useState("all");
   const [semesterFilter, setSemesterFilter] = useState("all");
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const result = await reportService.getDamageReports();
+
+      if (result.status === "success") {
+        setReports(result.data.damageReports || []);
+      } else {
+        toast.error(result.message || "Gagal memuat data laporan kerusakan");
+      }
+    } catch (error) {
+      console.error("Error fetching damage reports:", error);
+      toast.error("Terjadi kesalahan saat memuat data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const academicYearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return [
+      `${currentYear - 1}/${currentYear}`,
+      `${currentYear}/${currentYear + 1}`,
+      `${currentYear + 1}/${currentYear + 2}`,
+    ];
+  }, []);
 
   const filteredReports = useMemo(() => {
     const now = Date.now();
     const cutoff = now - Number(timePeriod) * 24 * 60 * 60 * 1000;
 
-    let reports = mockDamageReports.filter(
+    let filtered = reports.filter(
       (report) => new Date(report.createdAt).getTime() >= cutoff
     );
 
     // Filter berdasarkan tahun ajaran
     if (academicYearFilter !== "all") {
-      reports = reports.filter(
-        (report) =>
-          getAcademicYearFromDate(report.createdAt) === academicYearFilter
+      filtered = filtered.filter(
+        (report) => report.academicYear === academicYearFilter
       );
     }
 
-    // TAMBAHKAN FILTER SEMESTER
+    // Filter berdasarkan semester
     if (semesterFilter !== "all") {
-      reports = reports.filter(
-        (report) =>
-          getSemesterFromDate(report.createdAt) === semesterFilter ||
-          report.semester === semesterFilter
+      filtered = filtered.filter(
+        (report) => report.semester === semesterFilter
       );
     }
 
-    return reports;
-  }, [timePeriod, academicYearFilter, semesterFilter]);
-
-  const academicYearOptions = getAcademicYearOptions();
-  const semesterOptions = getSemesterOptions();
+    return filtered;
+  }, [reports, timePeriod, academicYearFilter, semesterFilter]);
 
   const priorityStats = useMemo(() => {
     return filteredReports.reduce(
@@ -147,25 +156,6 @@ export function DamageHistoryPage() {
       },
       { menunggu: 0, dalam_perbaikan: 0, selesai: 0 }
     );
-  }, [filteredReports]);
-
-  const facilityDamageChartData = useMemo(() => {
-    const counts = filteredReports.reduce((acc, report) => {
-      const asset = mockAssets.find((item) => item.id === report.assetId);
-
-      if (asset?.category === "fasilitas") {
-        acc[asset.name] = (acc[asset.name] || 0) + 1;
-      }
-      return acc;
-    }, {});
-
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, value]) => ({
-        name: name.length > 20 ? `${name.slice(0, 20)}...` : name,
-        value,
-      }));
   }, [filteredReports]);
 
   const priorityChartData = useMemo(
@@ -206,6 +196,20 @@ export function DamageHistoryPage() {
     });
   }, [filteredReports, timePeriod]);
 
+  const getTopDamagedAssets = useMemo(() => {
+    const assetCounts = {};
+
+    filteredReports.forEach((report) => {
+      const assetName = report.assetName || "Unknown Asset";
+      assetCounts[assetName] = (assetCounts[assetName] || 0) + 1;
+    });
+
+    return Object.entries(assetCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+  }, [filteredReports]);
+
   return (
     <div className="space-y-6">
       <header>
@@ -223,45 +227,166 @@ export function DamageHistoryPage() {
         academicYearOptions={academicYearOptions}
         semesterFilter={semesterFilter}
         setSemesterFilter={setSemesterFilter}
-        semesterOptions={semesterOptions}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {STAT_CARDS.map(({ key, title, icon: Icon, getValue, description }) => (
-          <Card key={key}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{title}</CardTitle>
-              <Icon className="h-4 w-4 text-muted-foreground" />
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {STAT_CARDS.map(({ key, title, icon: Icon, description }) => (
+              <Card key={key}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                  <Icon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {key === "total"
+                      ? filteredReports.length
+                      : key === "priority"
+                      ? priorityStats.tinggi
+                      : key === "menunggu"
+                      ? statusStats.menunggu
+                      : statusStats.selesai}
+                  </div>
+                  {description && (
+                    <p className="text-xs text-muted-foreground">
+                      {description(timePeriod)}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Distribusi Prioritas</CardTitle>
+                <CardDescription>
+                  Jumlah laporan berdasarkan tingkat prioritas
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={priorityChartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                      outerRadius={80}
+                      dataKey="value"
+                    >
+                      {priorityChartData.map((entry, index) => (
+                        <Cell key={index} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Status Laporan</CardTitle>
+                <CardDescription>
+                  Distribusi status penanganan laporan
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={statusChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Trend Laporan Kerusakan</CardTitle>
+              <CardDescription>
+                Perkembangan jumlah laporan per minggu
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {getValue(filteredReports, priorityStats, statusStats)}
-              </div>
-              {description && (
-                <p className="text-xs text-muted-foreground">
-                  {description(timePeriod)}
-                </p>
-              )}
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="week" />
+                  <YAxis />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="laporan"
+                    stroke="#8884d8"
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
-        ))}
-      </div>
 
-      <ChartsSection
-        priorityChartData={priorityChartData}
-        statusChartData={statusChartData}
-      />
-
-      <TrendChart data={trendData} />
-
-      <TopFacilitiesChart data={facilityDamageChartData} />
+          <Card>
+            <CardHeader>
+              <CardTitle>Aset Paling Sering Rusak</CardTitle>
+              <CardDescription>
+                5 aset dengan laporan kerusakan terbanyak
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {getTopDamagedAssets.map((asset, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-orange-500" />
+                      <span className="font-medium">{asset.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {asset.count} laporan
+                      </span>
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-orange-500 h-2 rounded-full"
+                          style={{
+                            width: `${
+                              (asset.count /
+                                Math.max(
+                                  ...getTopDamagedAssets.map((a) => a.count)
+                                )) *
+                              100
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
-
-/* -------------------------------------------------------------
-   COMPONENTS
--------------------------------------------------------------- */
 
 function PeriodSelector({
   value,
@@ -271,7 +396,6 @@ function PeriodSelector({
   academicYearOptions,
   semesterFilter,
   setSemesterFilter,
-  semesterOptions,
 }) {
   return (
     <Card>
@@ -312,8 +436,8 @@ function PeriodSelector({
               <SelectContent>
                 <SelectItem value="all">Semua Tahun Ajaran</SelectItem>
                 {academicYearOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                  <SelectItem key={option} value={option}>
+                    {option}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -328,123 +452,12 @@ function PeriodSelector({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Semester</SelectItem>
-                {semesterOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+                <SelectItem value="ganjil">Ganjil</SelectItem>
+                <SelectItem value="genap">Genap</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChartsSection({ priorityChartData, statusChartData }) {
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>Distribusi Prioritas</CardTitle>
-          <CardDescription>
-            Jumlah laporan berdasarkan tingkat prioritas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={priorityChartData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
-                }
-                outerRadius={80}
-                dataKey="value"
-              >
-                {priorityChartData.map((entry, index) => (
-                  <Cell key={index} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Status Laporan</CardTitle>
-          <CardDescription>
-            Distribusi status penanganan laporan
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={statusChartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function TrendChart({ data }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Trend Laporan Kerusakan</CardTitle>
-        <CardDescription>
-          Perkembangan jumlah laporan per minggu
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="week" />
-            <YAxis />
-            <Tooltip />
-            <Line
-              type="monotone"
-              dataKey="laporan"
-              stroke="#8884d8"
-              strokeWidth={2}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TopFacilitiesChart({ data }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Fasilitas Paling Sering Rusak</CardTitle>
-        <CardDescription>5 fasilitas dengan laporan terbanyak</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="value" fill="#8884d8" />
-          </BarChart>
-        </ResponsiveContainer>
       </CardContent>
     </Card>
   );

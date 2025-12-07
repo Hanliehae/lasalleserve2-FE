@@ -12,6 +12,7 @@ const api = axios.create({
 });
 
 // Interceptor untuk request
+// Interceptor untuk request - PERBAIKI UNTUK EKSPOR
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -19,7 +20,11 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Debug log
+    // Set responseType untuk CSV
+    if (config.url.includes('/export/') && config.params?.format === 'csv') {
+      config.responseType = 'text';
+    }
+    
     console.log(`🚀 ${config.method.toUpperCase()} ${config.url}`, config.params || '');
     
     return config;
@@ -30,10 +35,16 @@ api.interceptors.request.use(
   }
 );
 
-// Interceptor untuk response
+// Interceptor untuk response - TAMBAHKAN HANDLING CSV
 api.interceptors.response.use(
   (response) => {
     console.log(`✅ ${response.status} ${response.config.method.toUpperCase()} ${response.config.url}`);
+    
+    // Handle CSV response
+    if (response.config.responseType === 'text' && typeof response.data === 'string') {
+      return response;
+    }
+    
     return response;
   },
   (error) => {
@@ -50,13 +61,11 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
-      // Only redirect if not on login page
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }
     }
 
-    // Return a consistent error format
     return Promise.reject({
       status: 'error',
       message: error.response?.data?.message || error.message || 'Terjadi kesalahan',
@@ -65,5 +74,4 @@ api.interceptors.response.use(
     });
   }
 );
-
 export default api;

@@ -19,8 +19,8 @@ import {
   Package,
   AlertTriangle,
   ClipboardList,
+  Loader2,
 } from "lucide-react";
-
 import {
   Select,
   SelectContent,
@@ -30,7 +30,6 @@ import {
 } from "../components/ui/select";
 import { Label } from "../components/ui/label";
 
-// Fungsi untuk mendapatkan opsi tahun ajaran
 const getAcademicYearOptions = () => {
   const currentYear = new Date().getFullYear();
   return [
@@ -41,19 +40,13 @@ const getAcademicYearOptions = () => {
   ];
 };
 
-// Fungsi untuk mendapatkan opsi semester
-const getSemesterOptions = () => [
-  { value: "all", label: "Semua Semester" },
-  { value: "ganjil", label: "Ganjil" },
-  { value: "genap", label: "Genap" },
-];
-
 export function ExportPage() {
   const { user } = useAuth();
   const [selectedAcademicYear, setSelectedAcademicYear] = useState("");
   const [selectedSemester, setSelectedSemester] = useState("all");
   const [reportType, setReportType] = useState("peminjaman");
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [stats, setStats] = useState({
     totalAssets: 0,
     totalLoans: 0,
@@ -63,7 +56,6 @@ export function ExportPage() {
 
   const canExport = user?.role === "kepala_buf" || user?.role === "admin_buf";
 
-  // Fetch initial stats
   useEffect(() => {
     if (canExport) {
       fetchStats();
@@ -72,7 +64,8 @@ export function ExportPage() {
 
   const fetchStats = async () => {
     try {
-      // Fetch asset count
+      setLoading(true);
+
       const assetsResult = await assetService.getAssets();
       if (assetsResult.status === "success") {
         setStats((prev) => ({
@@ -81,7 +74,6 @@ export function ExportPage() {
         }));
       }
 
-      // Fetch loan count
       const loansResult = await loanService.getLoans();
       if (loansResult.status === "success") {
         const loans = loansResult.data.loans || [];
@@ -92,7 +84,6 @@ export function ExportPage() {
         }));
       }
 
-      // Fetch report count
       const reportsResult = await reportService.getDamageReports();
       if (reportsResult.status === "success") {
         setStats((prev) => ({
@@ -102,30 +93,33 @@ export function ExportPage() {
       }
     } catch (error) {
       console.error("Error fetching stats:", error);
+      toast.error("Gagal memuat statistik");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleExport = async (format) => {
+  const handleExport = async () => {
     if (!canExport) {
       toast.error("Anda tidak memiliki izin untuk mengekspor data");
       return;
     }
 
     try {
-      setLoading(true);
+      setExporting(true);
 
-      if (reportType === "peminjaman" || reportType === "pengembalian") {
+      if (reportType === "peminjaman") {
         await exportService.exportLoans(
           selectedAcademicYear || "",
           selectedSemester,
-          format
+          "csv"
         );
         toast.success("Data peminjaman berhasil diekspor");
       } else if (reportType === "kerusakan") {
         await exportService.exportDamageReports(
           selectedAcademicYear || "",
           selectedSemester,
-          format
+          "csv"
         );
         toast.success("Data kerusakan berhasil diekspor");
       } else {
@@ -133,32 +127,27 @@ export function ExportPage() {
       }
     } catch (error) {
       console.error("Export error:", error);
-      toast.error("Gagal mengekspor data");
+      toast.error(error.message || "Gagal mengekspor data");
     } finally {
-      setLoading(false);
+      setExporting(false);
     }
   };
 
-  const getReportTypeLabel = (type) => {
-    const labels = {
-      peminjaman: "Peminjaman",
-      pengembalian: "Pengembalian",
-      kerusakan: "Kerusakan",
-    };
-    return labels[type] || type;
-  };
-
   const academicYearOptions = getAcademicYearOptions();
-  const semesterOptions = getSemesterOptions();
 
   if (!canExport) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <Card className="max-w-md">
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-center">
-              Anda tidak memiliki akses ke halaman ini
-            </p>
+            <div className="text-center">
+              <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold">Akses Ditolak</h3>
+              <p className="text-muted-foreground mt-2">
+                Anda tidak memiliki izin untuk mengakses halaman ini. Hanya
+                Kepala BUF dan Admin BUF yang dapat mengekspor data.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -174,7 +163,6 @@ export function ExportPage() {
         </p>
       </div>
 
-      {/* Ringkasan Statistik */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -223,7 +211,7 @@ export function ExportPage() {
             <FileText className="size-5 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-lg font-bold">
               {selectedAcademicYear || "Semua"}
             </div>
             <p className="text-sm text-muted-foreground">Filter aktif</p>
@@ -231,7 +219,6 @@ export function ExportPage() {
         </Card>
       </div>
 
-      {/* Filter Laporan dengan Semester */}
       <Card>
         <CardHeader>
           <CardTitle>Filter Laporan</CardTitle>
@@ -251,7 +238,7 @@ export function ExportPage() {
                   <SelectValue placeholder="Pilih Tahun Ajaran" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem>Semua Tahun Ajaran</SelectItem>
+                  <SelectItem value="">Semua Tahun Ajaran</SelectItem>
                   {academicYearOptions.map((year) => (
                     <SelectItem key={year} value={year}>
                       {year}
@@ -271,11 +258,9 @@ export function ExportPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {semesterOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="all">Semua Semester</SelectItem>
+                  <SelectItem value="ganjil">Ganjil</SelectItem>
+                  <SelectItem value="genap">Genap</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -288,9 +273,6 @@ export function ExportPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="peminjaman">Laporan Peminjaman</SelectItem>
-                  <SelectItem value="pengembalian">
-                    Laporan Pengembalian
-                  </SelectItem>
                   <SelectItem value="kerusakan">Laporan Kerusakan</SelectItem>
                 </SelectContent>
               </Select>
@@ -299,7 +281,6 @@ export function ExportPage() {
         </CardContent>
       </Card>
 
-      {/* Ekspor Laporan */}
       <Card>
         <CardHeader>
           <CardTitle>Ekspor Laporan</CardTitle>
@@ -312,23 +293,34 @@ export function ExportPage() {
               <p className="text-sm">
                 • Tahun Ajaran: {selectedAcademicYear || "Semua"}
                 <br />• Semester:{" "}
-                {
-                  semesterOptions.find((s) => s.value === selectedSemester)
-                    ?.label
-                }
-                <br />• Jenis Laporan: {getReportTypeLabel(reportType)}
+                {selectedSemester === "all"
+                  ? "Semua"
+                  : selectedSemester === "ganjil"
+                  ? "Ganjil"
+                  : "Genap"}
+                <br />• Jenis Laporan:{" "}
+                {reportType === "peminjaman" ? "Peminjaman" : "Kerusakan"}
                 <br />• Format: CSV (Excel compatible)
               </p>
             </div>
 
             <div className="flex gap-2">
               <Button
-                onClick={() => handleExport("csv")}
-                disabled={loading}
+                onClick={handleExport}
+                disabled={exporting}
                 className="flex-1"
               >
-                <Download className="mr-2 size-4" />
-                {loading ? "Memproses..." : "Export CSV"}
+                {exporting ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Mengekspor...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 size-4" />
+                    Export CSV
+                  </>
+                )}
               </Button>
             </div>
 

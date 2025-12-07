@@ -1,4 +1,3 @@
-// src/lib/services/returnService.js
 import api from './api';
 
 export const returnService = {
@@ -32,13 +31,11 @@ export const returnService = {
     try {
       console.log(`🔄 Processing return for loan ID: ${loanId}`);
       
-      // Validate all items are selected for return
-      const allItemsReturned = returnData.returnedItems.every(item => item.returned);
-      if (!allItemsReturned) {
-        throw new Error('Semua item harus dipilih untuk dikembalikan');
+      // Validasi semua items
+      if (!returnData.returnedItems || returnData.returnedItems.length === 0) {
+        throw new Error('Minimal satu item harus dikembalikan');
       }
 
-      // Format data untuk backend
       const payload = {
         returnedItems: returnData.returnedItems
           .filter(item => item.returned)
@@ -46,7 +43,7 @@ export const returnService = {
             id: item.id,
             name: item.name,
             quantity: item.quantity,
-            condition: item.condition
+            condition: item.condition || 'baik'
           })),
         notes: returnData.notes || ''
       };
@@ -56,11 +53,10 @@ export const returnService = {
       return response.data;
     } catch (error) {
       console.error('❌ Error processing return:', error);
-      throw new Error(error.message || error.message || 'Gagal memproses pengembalian');
+      throw new Error(error.message || 'Gagal memproses pengembalian');
     }
   },
 
-  // Get return statistics
   async getReturnStats() {
     try {
       const pendingResponse = await this.getPendingReturns();
@@ -73,7 +69,7 @@ export const returnService = {
         pending: pendingLoans.length,
         overdue: pendingLoans.filter(loan => {
           const today = new Date().toISOString().split('T')[0];
-          return loan.end_date < today;
+          return loan.endDate < today;
         }).length,
         waitingReturn: pendingLoans.filter(loan => loan.status === 'menunggu_pengembalian').length,
         completed: historyLoans.length

@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, Eye, Plus, Search, Edit } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { AlertTriangle, Eye, Plus, Search, Edit, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { ImageWithFallback } from "../components/common/ImageWithFallback.jsx";
 import { Badge } from "../components/ui/badge";
@@ -38,11 +39,10 @@ import {
 } from "../components/ui/table";
 import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/auth-context.jsx";
-import { mockDamageReports, mockAssets } from "../lib/mock-data.js";
-
+import { reportService } from "../lib/services/reportService";
+import { assetService } from "../lib/services/assetService";
 import { uploadService } from "../lib/services/uploadService";
 import { Upload, X } from "lucide-react";
-import { toast } from "sonner";
 
 const MANAGER_ROLES = ["staf_buf", "admin_buf", "kepala_buf"];
 const STATUS_OPTIONS = [
@@ -71,95 +71,129 @@ const PRIORITY_BADGE_VARIANTS = {
 
 export function ReportsPage() {
   const { user } = useAuth();
-  const [reports, setReports] = useState(mockDamageReports);
+  const [reports, setReports] = useState([]);
+  const [assets, setAssets] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingReport, setEditingReport] = useState(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  // const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Hanya staf biasa yang bisa membuat laporan
-  const canCreateReport = ![
-    "staf_buf",
-    "admin_buf",
-    "kepala_buf",
-    "admin",
-  ].includes(user?.role ?? "");
+  const canCreateReport = !MANAGER_ROLES.includes(user?.role ?? "");
+  const isKepalaBUF = user?.role === "kepala_buf";
+
+  useEffect(() => {
+    fetchReports();
+    fetchAssets();
+  }, []);
+
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const result = await reportService.getDamageReports(
+        searchTerm,
+        statusFilter,
+        priorityFilter
+      );
+
+      if (result.status === "success") {
+        setReports(result.data.damageReports || []);
+      } else {
+        toast.error(result.message || "Gagal memuat laporan kerusakan");
+      }
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+      toast.error(error.message || "Terjadi kesalahan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAssets = async () => {
+    try {
+      const result = await assetService.getAssets();
+      if (result.status === "success") {
+        setAssets(result.data.assets || []);
+      }
+    } catch (error) {
+      console.error("Error fetching assets:", error);
+    }
+  };
+
+  const handleSearchSubmit = () => {
+    fetchReports();
+  };
+
+  const handleCreateReport = async (formData) => {
+    try {
+      const result = await reportService.createDamageReport(formData);
+
+      if (result.status === "success") {
+        toast.success("Laporan kerusakan berhasil dibuat");
+        fetchReports();
+        setIsDialogOpen(false);
+      } else {
+        toast.error(result.message || "Gagal membuat laporan");
+      }
+    } catch (error) {
+      console.error("Error creating report:", error);
+      toast.error(error.message || "Terjadi kesalahan");
+    }
+  };
+
+  const handleUpdateReport = async (id, updateData) => {
+    try {
+      const result = await reportService.updateDamageReport(id, updateData);
+
+      if (result.status === "success") {
+        toast.success("Laporan berhasil diperbarui");
+        fetchReports();
+        setIsEditDialogOpen(false);
+        setEditingReport(null);
+      } else {
+        toast.error(result.message || "Gagal memperbarui laporan");
+      }
+    } catch (error) {
+      console.error("Error updating report:", error);
+      toast.error(error.message || "Terjadi kesalahan");
+    }
+  };
+
+  const handleDeleteReport = async (id) => {
+    if (!window.confirm("Yakin ingin menghapus laporan ini?")) return;
+
+    try {
+      const result = await reportService.deleteDamageReport(id);
+
+      if (result.status === "success") {
+        toast.success("Laporan berhasil dihapus");
+        fetchReports();
+      } else {
+        toast.error(result.message || "Gagal menghapus laporan");
+      }
+    } catch (error) {
+      console.error("Error deleting report:", error);
+      toast.error(error.message || "Terjadi kesalahan");
+    }
+  };
 
   const filteredReports = useMemo(() => {
-    const keyword = searchTerm.toLowerCase();
     return reports.filter((report) => {
       const matchesSearch =
-        report.assetName.toLowerCase().includes(keyword) ||
-        report.reporterName.toLowerCase().includes(keyword);
+        report.assetName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        report.reporterName?.toLowerCase().includes(searchTerm.toLowerCase());
+
       const matchesStatus =
         statusFilter === "all" || report.status === statusFilter;
+
       const matchesPriority =
         priorityFilter === "all" || report.priority === priorityFilter;
+
       return matchesSearch && matchesStatus && matchesPriority;
     });
   }, [reports, searchTerm, statusFilter, priorityFilter]);
-
-  const handleSearchChange = (event) => setSearchTerm(event.target.value);
-  const handleStatusChange = (value) => setStatusFilter(value);
-  const handlePriorityChange = (value) => setPriorityFilter(value);
-
-  const handleCreateReport = (formData) => {
-    const asset = mockAssets.find((item) => item.id === formData.assetId);
-
-    const newReport = {
-      id: `r${reports.length + 1}`,
-      assetId: formData.assetId ?? "",
-      assetName: asset?.name ?? "",
-      reportedBy: user?.id ?? "",
-      reporterName: user?.name ?? "Pengguna",
-      description: formData.description ?? "",
-      priority: formData.priority ?? "sedang",
-      status: "menunggu",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setReports((prev) => [...prev, newReport]);
-    setIsDialogOpen(false);
-  };
-
-  const handleUpdateStatus = (id, status) => {
-    setReports(
-      reports.map((r) =>
-        r.id === id ? { ...r, status, updatedAt: new Date().toISOString() } : r
-      )
-    );
-  };
-
-  const handleUpdatePriority = (id, priority) => {
-    setReports(
-      reports.map((r) =>
-        r.id === id
-          ? { ...r, priority, updatedAt: new Date().toISOString() }
-          : r
-      )
-    );
-  };
-
-  const handleEditReport = (report) => {
-    setEditingReport(report);
-    setIsEditDialogOpen(true);
-  };
-
-  const handleSaveEdit = (updatedData) => {
-    setReports(
-      reports.map((r) =>
-        r.id === editingReport.id
-          ? { ...r, ...updatedData, updatedAt: new Date().toISOString() }
-          : r
-      )
-    );
-    setIsEditDialogOpen(false);
-    setEditingReport(null);
-  };
 
   return (
     <div className="space-y-6">
@@ -167,9 +201,7 @@ export function ReportsPage() {
         <div>
           <h1>Laporan Kerusakan</h1>
           <p className="text-muted-foreground mt-2">
-            {["staf_buf", "admin_buf", "kepala_buf", "admin"].includes(
-              user?.role ?? ""
-            )
+            {MANAGER_ROLES.includes(user?.role ?? "")
               ? "Kelola laporan kerusakan aset"
               : "Lihat laporan kerusakan yang Anda laporkan"}
           </p>
@@ -190,12 +222,18 @@ export function ReportsPage() {
               <Input
                 placeholder="Cari aset atau pelapor..."
                 value={searchTerm}
-                onChange={handleSearchChange}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm"
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") handleSearchSubmit();
+                }}
               />
+              <Button onClick={handleSearchSubmit} variant="outline">
+                Cari
+              </Button>
             </div>
             <div className="flex gap-2">
-              <Select value={statusFilter} onValueChange={handleStatusChange}>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
@@ -208,10 +246,7 @@ export function ReportsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select
-                value={priorityFilter}
-                onValueChange={handlePriorityChange}
-              >
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="Prioritas" />
                 </SelectTrigger>
@@ -228,19 +263,30 @@ export function ReportsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <ReportsTable
-            reports={filteredReports}
-            onUpdateStatus={handleUpdateStatus}
-            onUpdatePriority={handleUpdatePriority}
-            onEditReport={handleEditReport}
-            userRole={user?.role}
-          />
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <ReportsTable
+              reports={filteredReports}
+              onUpdate={handleUpdateReport}
+              onDelete={handleDeleteReport}
+              onEditReport={(report) => {
+                setEditingReport(report);
+                setIsEditDialogOpen(true);
+              }}
+              userRole={user?.role}
+              isKepalaBUF={isKepalaBUF}
+            />
+          )}
         </CardContent>
       </Card>
 
+      {/* Dialog Buat Laporan */}
       {canCreateReport && (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Lapor Kerusakan Aset</DialogTitle>
               <DialogDescription>
@@ -248,6 +294,7 @@ export function ReportsPage() {
               </DialogDescription>
             </DialogHeader>
             <ReportForm
+              assets={assets}
               onSubmit={handleCreateReport}
               onCancel={() => setIsDialogOpen(false)}
             />
@@ -255,7 +302,8 @@ export function ReportsPage() {
         </Dialog>
       )}
 
-      {editingReport && (
+      {/* Dialog Edit Laporan (Hanya Kepala BUF) */}
+      {isKepalaBUF && editingReport && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -266,7 +314,7 @@ export function ReportsPage() {
             </DialogHeader>
             <EditReportForm
               report={editingReport}
-              onSubmit={handleSaveEdit}
+              onSubmit={(data) => handleUpdateReport(editingReport.id, data)}
               onCancel={() => {
                 setIsEditDialogOpen(false);
                 setEditingReport(null);
@@ -281,32 +329,20 @@ export function ReportsPage() {
 
 function ReportsTable({
   reports,
-  onUpdateStatus,
-  onUpdatePriority,
+  onUpdate,
+  onDelete,
   onEditReport,
   userRole,
+  isKepalaBUF,
 }) {
   if (reports.length === 0) {
     return (
       <div className="rounded-md border p-8 text-center text-muted-foreground">
+        <AlertTriangle className="mx-auto size-12 mb-4" />
         Tidak ada laporan ditemukan
       </div>
     );
   }
-
-  // Definisikan siapa yang bisa melihat detail
-  const canViewDetail = [
-    "admin",
-    "staf_buf",
-    "admin_buf",
-    "kepala_buf",
-  ].includes(userRole);
-
-  // Hanya kepala_buf yang bisa mengedit prioritas
-  const canEditPriority = userRole === "kepala_buf";
-
-  // Hanya kepala_buf yang bisa mengedit status
-  const canEditStatus = userRole === "kepala_buf";
 
   return (
     <div className="overflow-x-auto">
@@ -319,8 +355,8 @@ function ReportsTable({
               <TableHead>Prioritas</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Tanggal</TableHead>
-              {canViewDetail && <TableHead>Detail</TableHead>}
-              {userRole === "kepala_buf" && <TableHead>Aksi</TableHead>}
+              <TableHead>Detail</TableHead>
+              {isKepalaBUF && <TableHead>Aksi</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -334,11 +370,11 @@ function ReportsTable({
                 </TableCell>
                 <TableCell>{report.reporterName}</TableCell>
                 <TableCell>
-                  {canEditPriority ? (
+                  {isKepalaBUF ? (
                     <Select
                       value={report.priority}
                       onValueChange={(value) =>
-                        onUpdatePriority(report.id, value)
+                        onUpdate(report.id, { priority: value })
                       }
                     >
                       <SelectTrigger className="w-[120px]">
@@ -357,11 +393,11 @@ function ReportsTable({
                   )}
                 </TableCell>
                 <TableCell>
-                  {canEditStatus ? (
+                  {isKepalaBUF ? (
                     <Select
                       value={report.status}
                       onValueChange={(value) =>
-                        onUpdateStatus(report.id, value)
+                        onUpdate(report.id, { status: value })
                       }
                     >
                       <SelectTrigger className="w-[160px]">
@@ -382,20 +418,27 @@ function ReportsTable({
                 <TableCell>
                   {new Date(report.createdAt).toLocaleDateString("id-ID")}
                 </TableCell>
-                {canViewDetail && (
+                <TableCell>
+                  <ReportDetailDialog report={report} />
+                </TableCell>
+                {isKepalaBUF && (
                   <TableCell>
-                    <ReportDetailDialog report={report} />
-                  </TableCell>
-                )}
-                {userRole === "kepala_buf" && (
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onEditReport(report)}
-                    >
-                      <Edit className="size-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onEditReport(report)}
+                      >
+                        <Edit className="size-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDelete(report.id)}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 )}
               </TableRow>
@@ -432,32 +475,44 @@ function ReportDetailDialog({ report }) {
           <DialogTitle>Detail Laporan Kerusakan</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <DetailField label="Aset" value={report.assetName} />
-          <DetailField label="Pelapor" value={report.reporterName} />
-          <DetailField label="Prioritas">
+          <div>
+            <Label className="text-muted-foreground">Aset</Label>
+            <p className="font-medium">{report.assetName}</p>
+          </div>
+          <div>
+            <Label className="text-muted-foreground">Pelapor</Label>
+            <p>{report.reporterName}</p>
+          </div>
+          <div>
+            <Label className="text-muted-foreground">Prioritas</Label>
             <PriorityBadge value={report.priority} />
-          </DetailField>
-          <DetailField label="Status">
+          </div>
+          <div>
+            <Label className="text-muted-foreground">Status</Label>
             <StatusBadge value={report.status} />
-          </DetailField>
-          <DetailField label="Deskripsi" value={report.description} />
-          <DetailField
-            label="Tanggal Dilaporkan"
-            value={new Date(report.createdAt).toLocaleDateString("id-ID")}
-          />
-          a
-          <DetailField
-            label="Terakhir Diupdate"
-            value={new Date(report.updatedAt).toLocaleDateString("id-ID")}
-          />
+          </div>
+          <div>
+            <Label className="text-muted-foreground">Deskripsi Kerusakan</Label>
+            <p className="whitespace-pre-wrap">{report.description}</p>
+          </div>
+          <div>
+            <Label className="text-muted-foreground">Tanggal Dilaporkan</Label>
+            <p>{new Date(report.createdAt).toLocaleDateString("id-ID")}</p>
+          </div>
           {report.photoUrl && (
-            <div className="space-y-2">
-              <Label>Foto Kerusakan</Label>
+            <div>
+              <Label className="text-muted-foreground">Foto Kerusakan</Label>
               <ImageWithFallback
                 src={report.photoUrl}
                 alt={`Foto kerusakan ${report.assetName}`}
-                className="w-full rounded-md object-cover"
+                className="mt-2 rounded-md border"
               />
+            </div>
+          )}
+          {report.notes && (
+            <div>
+              <Label className="text-muted-foreground">Catatan Tambahan</Label>
+              <p className="whitespace-pre-wrap">{report.notes}</p>
             </div>
           )}
         </div>
@@ -466,26 +521,14 @@ function ReportDetailDialog({ report }) {
   );
 }
 
-function DetailField({ label, value, children }) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-muted-foreground">{label}</p>
-      {children ? (
-        <div className="mt-1">{children}</div>
-      ) : (
-        <p className="mt-1 text-sm">{value}</p>
-      )}
-    </div>
-  );
-}
-
-function ReportForm({ onSubmit, onCancel }) {
+function ReportForm({ assets, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
     assetId: "",
     description: "",
+    priority: "sedang",
     photoUrl: "",
+    notes: "",
   });
-
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState("");
 
@@ -527,103 +570,82 @@ function ReportForm({ onSubmit, onCancel }) {
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (!formData.assetId) {
+      toast.error("Pilih aset terlebih dahulu");
+      return;
+    }
+
+    if (!formData.description.trim()) {
+      toast.error("Deskripsi kerusakan harus diisi");
+      return;
+    }
+
     onSubmit(formData);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label>Nama Aset</Label>
-
-        <Input
-          value={formData.name}
-          onChange={(event) =>
-            setFormData({ ...formData, name: event.target.value })
+        <Label>Aset yang Rusak *</Label>
+        <Select
+          value={formData.assetId}
+          onValueChange={(value) =>
+            setFormData({ ...formData, assetId: value })
           }
-          placeholder="Contoh: Proyektor LCD 01"
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Pilih aset" />
+          </SelectTrigger>
+          <SelectContent>
+            {assets.map((asset) => (
+              <SelectItem key={asset.id} value={asset.id}>
+                {asset.name} ({asset.category})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Prioritas *</Label>
+        <Select
+          value={formData.priority}
+          onValueChange={(value) =>
+            setFormData({ ...formData, priority: value })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PRIORITY_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Deskripsi Kerusakan *</Label>
+        <Textarea
+          value={formData.description}
+          onChange={(e) =>
+            setFormData({ ...formData, description: e.target.value })
+          }
+          placeholder="Jelaskan kerusakan yang terjadi..."
+          rows={4}
           required
         />
       </div>
-      <div className="space-y-2">
-        <Label>Kategori</Label>
-        <Select
-          value={formData.category}
-          onValueChange={(value) =>
-            setFormData({ ...formData, category: value })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fasilitas">Fasilitas</SelectItem>
-            <SelectItem value="ruangan">Ruangan</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
 
-      <div className="space-y-2">
-        <Label>Lokasi</Label>
-        <Input
-          value={formData.location}
-          onChange={(event) =>
-            setFormData({ ...formData, location: event.target.value })
-          }
-          placeholder="Gedung Agustinus"
-          required="*"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Tahun Ajaran</Label>
-        <Input
-          value={formData.acquisitionYear}
-          onChange={(event) =>
-            setFormData({ ...formData, acquisitionYear: event.target.value })
-          }
-          placeholder="Contoh: 2024/2025"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Semester</Label>
-        <Select
-          value={formData.semester}
-          onValueChange={(value) =>
-            setFormData({ ...formData, semester: value })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Ganjil">Ganjil</SelectItem>
-            <SelectItem value="Genap">Genap</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Deskripsi</Label>
-        <Textarea
-          value={formData.description}
-          onChange={(event) =>
-            setFormData((prev) => ({
-              ...prev,
-              description: event.target.value,
-            }))
-          }
-          rows={3}
-        />
-      </div>
-
-      {/* upload foto kerusakan (opsional) */}
       <div className="space-y-2">
         <Label>Foto Kerusakan (Opsional)</Label>
-
         {!preview ? (
           <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
-            <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
+            <Upload className="mx-auto size-12 text-muted-foreground" />
             <div className="mt-4">
               <Label
                 htmlFor="photo-upload"
@@ -658,23 +680,32 @@ function ReportForm({ onSubmit, onCancel }) {
               className="absolute top-2 right-2"
               onClick={removeImage}
             >
-              <X className="h-4 w-4" />
+              <X className="size-4" />
             </Button>
           </div>
         )}
       </div>
 
-      <div className="flex justify-end gap-2">
+      <div className="space-y-2">
+        <Label>Catatan Tambahan (Opsional)</Label>
+        <Textarea
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          placeholder="Tambahkan catatan jika diperlukan..."
+          rows={2}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Batal
         </Button>
-        <Button type="submit">Submit</Button>
+        <Button type="submit">Kirim Laporan</Button>
       </div>
     </form>
   );
 }
 
-// Form Edit untuk Kepala BUF
 function EditReportForm({ report, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
     priority: report.priority,
@@ -695,7 +726,7 @@ function EditReportForm({ report, onSubmit, onCancel }) {
           <Select
             value={formData.priority}
             onValueChange={(value) =>
-              setFormData((prev) => ({ ...prev, priority: value }))
+              setFormData({ ...formData, priority: value })
             }
           >
             <SelectTrigger>
@@ -716,7 +747,7 @@ function EditReportForm({ report, onSubmit, onCancel }) {
           <Select
             value={formData.status}
             onValueChange={(value) =>
-              setFormData((prev) => ({ ...prev, status: value }))
+              setFormData({ ...formData, status: value })
             }
           >
             <SelectTrigger>
@@ -734,14 +765,11 @@ function EditReportForm({ report, onSubmit, onCancel }) {
       </div>
 
       <div className="space-y-2">
-        <Label>Catatan Tambahan (Opsional)</Label>
+        <Label>Catatan Tambahan</Label>
         <Textarea
           value={formData.notes}
           onChange={(event) =>
-            setFormData((prev) => ({
-              ...prev,
-              notes: event.target.value,
-            }))
+            setFormData({ ...formData, notes: event.target.value })
           }
           placeholder="Tambahkan catatan atau instruksi untuk tim..."
           rows={3}

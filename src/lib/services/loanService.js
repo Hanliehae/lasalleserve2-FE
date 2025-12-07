@@ -1,4 +1,3 @@
-// src/lib/services/loanService.js
 import api from './api';
 
 export const loanService = {
@@ -15,7 +14,12 @@ export const loanService = {
       return response.data;
     } catch (error) {
       console.error('❌ Error fetching loans:', error);
-      throw new Error(error.message || 'Gagal memuat data peminjaman');
+      // Return empty data instead of throwing
+      return {
+        status: 'error',
+        message: error.message || 'Gagal memuat data peminjaman',
+        data: { loans: [] }
+      };
     }
   },
 
@@ -65,20 +69,50 @@ export const loanService = {
       return response.data;
     } catch (error) {
       console.error('❌ Error creating loan:', error);
-      throw new Error(error.message || error.message || 'Gagal membuat peminjaman');
+      // Return consistent error format
+      return {
+        status: 'error',
+        message: error.message || 'Gagal membuat peminjaman',
+        data: null
+      };
     }
   },
 
-  async updateLoanStatus(id, status, notes = '') {
-    try {
-      console.log(`📝 Updating loan ${id} status to ${status}`);
-      const response = await api.put(`/loans/${id}/status`, { status, notes });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Error updating loan status:', error);
-      throw new Error(error.message || 'Gagal memperbarui status peminjaman');
+// src/lib/services/loanService.js - PERBAIKI updateLoanStatus
+async updateLoanStatus(id, status, notes = '') {
+  try {
+    console.log(`📝 Updating loan ${id} status to ${status}`, notes ? `with notes: ${notes}` : '');
+    
+    // Validasi status yang diizinkan
+    const allowedStatus = ['disetujui', 'ditolak', 'menunggu_pengembalian', 'selesai'];
+    if (!allowedStatus.includes(status)) {
+      throw new Error(`Status ${status} tidak valid`);
     }
-  },
+
+    const payload = { 
+      status, 
+      notes: notes || '' // Pastikan notes selalu dikirim (string kosong jika tidak ada)
+    };
+
+    console.log('📝 Update status payload:', payload);
+    
+    const response = await api.put(`/loans/${id}/status`, payload);
+    
+    // Debug response
+    console.log('📝 Update status response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error updating loan status:', error);
+    
+    // Return consistent error format
+    return {
+      status: 'error',
+      message: error.response?.data?.message || error.message || 'Gagal memperbarui status peminjaman',
+      data: null
+    };
+  }
+},
 
   async deleteLoan(id) {
     try {
@@ -87,7 +121,11 @@ export const loanService = {
       return response.data;
     } catch (error) {
       console.error('❌ Error deleting loan:', error);
-      throw new Error(error.message || 'Gagal menghapus peminjaman');
+      return {
+        status: 'error',
+        message: error.message || 'Gagal menghapus peminjaman',
+        data: null
+      };
     }
   },
 
