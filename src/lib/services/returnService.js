@@ -1,3 +1,4 @@
+// src/lib/services/returnService.js - PERBAIKAN COMPLETE
 import api from './api';
 
 export const returnService = {
@@ -5,10 +6,24 @@ export const returnService = {
     try {
       console.log('🔄 Fetching pending returns');
       const response = await api.get('/returns/pending');
-      return response.data;
+      
+      // Pastikan response memiliki struktur yang benar
+      if (response.data && response.data.status === 'success') {
+        console.log('✅ Pending returns fetched successfully:', response.data.data?.loans?.length || 0, 'loans');
+        return response.data;
+      } else {
+        // Jika response tidak sesuai format yang diharapkan
+        throw new Error(response.data?.message || 'Format response tidak valid');
+      }
     } catch (error) {
       console.error('❌ Error fetching pending returns:', error);
-      throw new Error(error.message || 'Gagal memuat data pengembalian tertunda');
+      
+      // Return response error dengan format konsisten
+      return {
+        status: 'error',
+        message: error.response?.data?.message || error.message || 'Gagal memuat data pengembalian tertunda',
+        data: { loans: [], stats: { total: 0, overdue: 0, today: 0 } }
+      };
     }
   },
 
@@ -20,10 +35,19 @@ export const returnService = {
       
       console.log(`🔄 Fetching return history with params: ${params.toString()}`);
       const response = await api.get(`/returns/history?${params.toString()}`);
-      return response.data;
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data?.message || 'Format response tidak valid');
+      }
     } catch (error) {
       console.error('❌ Error fetching return history:', error);
-      throw new Error(error.message || 'Gagal memuat riwayat pengembalian');
+      return {
+        status: 'error',
+        message: error.response?.data?.message || error.message || 'Gagal memuat riwayat pengembalian',
+        data: { returns: [] }
+      };
     }
   },
 
@@ -50,10 +74,19 @@ export const returnService = {
 
       console.log('🔄 Return payload:', payload);
       const response = await api.post(`/returns/${loanId}/process`, payload);
-      return response.data;
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data?.message || 'Format response tidak valid');
+      }
     } catch (error) {
       console.error('❌ Error processing return:', error);
-      throw new Error(error.message || 'Gagal memproses pengembalian');
+      return {
+        status: 'error',
+        message: error.response?.data?.message || error.message || 'Gagal memproses pengembalian',
+        data: null
+      };
     }
   },
 
@@ -62,8 +95,17 @@ export const returnService = {
       const pendingResponse = await this.getPendingReturns();
       const historyResponse = await this.getReturnHistory();
       
-      const pendingLoans = pendingResponse.data?.loans || [];
-      const historyLoans = historyResponse.data?.returns || [];
+      // Handle jika ada error
+      if (pendingResponse.status === 'error') {
+        console.warn('⚠️ Could not get pending returns for stats');
+      }
+      
+      if (historyResponse.status === 'error') {
+        console.warn('⚠️ Could not get return history for stats');
+      }
+      
+      const pendingLoans = pendingResponse.status === 'success' ? pendingResponse.data?.loans || [] : [];
+      const historyLoans = historyResponse.status === 'success' ? historyResponse.data?.returns || [] : [];
       
       const stats = {
         pending: pendingLoans.length,

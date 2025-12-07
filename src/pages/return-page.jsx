@@ -73,6 +73,11 @@ export function ReturnPage() {
   });
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    overdue: 0,
+    today: 0,
+  });
 
   const canApprove = APPROVER_ROLES.includes(user?.role ?? "");
 
@@ -80,39 +85,59 @@ export function ReturnPage() {
     fetchData();
   }, [statusFilter]);
 
+  // src/pages/return-page.jsx - PERBAIKI fungsi fetchData
   const fetchData = async () => {
     try {
       setLoading(true);
 
       if (statusFilter === "pending") {
-        // Ambil peminjaman yang statusnya 'disetujui' atau 'menunggu_pengembalian'
-        const result = await loanService.getLoans(
-          "",
-          "disetujui,menunggu_pengembalian"
-        );
-        if (result.status === "success") {
+        const result = await returnService.getPendingReturns();
+
+        // Handle jika response error
+        if (result.status === "error") {
+          console.error("Error from service:", result.message);
+          toast.error(result.message);
+          setPendingReturns([]);
+          setStats({ total: 0, overdue: 0, today: 0 });
+        } else if (result.status === "success") {
           setPendingReturns(result.data.loans || []);
+          setStats(result.data.stats || { total: 0, overdue: 0, today: 0 });
         } else {
-          toast.error("Gagal memuat data peminjaman aktif");
+          // Handle response format yang tidak dikenali
+          toast.error("Format data tidak valid");
+          setPendingReturns([]);
+          setStats({ total: 0, overdue: 0, today: 0 });
         }
       } else if (statusFilter === "history") {
-        // Ambil riwayat pengembalian menggunakan returnService
         const result = await returnService.getReturnHistory();
-        if (result.status === "success") {
+
+        if (result.status === "error") {
+          console.error("Error from service:", result.message);
+          toast.error(result.message);
+          setReturnHistory([]);
+        } else if (result.status === "success") {
           setReturnHistory(result.data.returns || []);
-        } else {
-          toast.error("Gagal memuat riwayat pengembalian");
         }
       }
 
       // Ambil data aset untuk referensi
-      const assetsResult = await assetService.getAssets();
-      if (assetsResult.status === "success") {
-        setAssets(assetsResult.data.assets || []);
+      try {
+        const assetsResult = await assetService.getAssets();
+        if (assetsResult.status === "success") {
+          setAssets(assetsResult.data.assets || []);
+        }
+      } catch (assetError) {
+        console.error("Error fetching assets:", assetError);
+        // Lanjutkan tanpa data aset
       }
     } catch (error) {
       console.error("Error fetching data:", error);
-      toast.error("Terjadi kesalahan saat memuat data");
+      toast.error(error.message || "Terjadi kesalahan saat memuat data");
+
+      // Set data kosong untuk mencegah crash
+      setPendingReturns([]);
+      setReturnHistory([]);
+      setStats({ total: 0, overdue: 0, today: 0 });
     } finally {
       setLoading(false);
     }
@@ -131,6 +156,40 @@ export function ReturnPage() {
       return matchesSearch;
     });
   }, [pendingReturns, returnHistory, searchTerm, statusFilter]);
+
+  // const getLoanStatus = (loan) => {
+  //   const today = new Date().toISOString().split("T")[0];
+  //   const endDate = loan.endDate;
+  //   const isOverdue =
+  //     loan.isOverdue ||
+  //     (endDate && endDate < today && loan.status !== "selesai");
+
+  //   if (loan.status === "selesai") {
+  //     return {
+  //       type: "returned",
+  //       label: "Sudah Dikembalikan",
+  //       variant: "outline",
+  //     };
+  //   } else if (loan.status === "menunggu_pengembalian" || isOverdue) {
+  //     return {
+  //       type: "waiting_return",
+  //       label: isOverdue ? "Terlambat" : "Menunggu Pengembalian",
+  //       variant: isOverdue ? "destructive" : "secondary",
+  //     };
+  //   } else if (endDate === today) {
+  //     return {
+  //       type: "due_today",
+  //       label: "Jatuh Tempo Hari Ini",
+  //       variant: "default",
+  //     };
+  //   } else {
+  //     return {
+  //       type: "active",
+  //       label: "Sedang Dipinjam",
+  //       variant: "default",
+  //     };
+  //   }
+  // };
 
   const handleProcessReturn = async () => {
     if (!selectedLoan) return;
@@ -233,6 +292,30 @@ export function ReturnPage() {
     }));
   };
 
+  // const getLoanStatus = (loan) => {
+  //   const today = new Date().toISOString().split("T")[0];
+  //   const endDate = loan.endDate;
+
+  //   if (loan.status === "selesai") {
+  //     return {
+  //       type: "returned",
+  //       label: "Sudah Dikembalikan",
+  //       variant: "outline",
+  //     };
+  //   } else if (loan.status === "menunggu_pengembalian") {
+  //     return {
+  //       type: "waiting_return",
+  //       label: "Menunggu Pengembalian",
+  //       variant: "secondary",
+  //     };
+  //   } else if (endDate && endDate < today) {
+  //     return { type: "overdue", label: "Terlambat", variant: "destructive" };
+  //   } else {
+  //     return { type: "active", label: "Sedang Dipinjam", variant: "default" };
+  //   }
+  // };
+
+  // src/pages/return-page.jsx - PERBAIKI FUNGSI getLoanStatus
   const getLoanStatus = (loan) => {
     const today = new Date().toISOString().split("T")[0];
     const endDate = loan.endDate;
@@ -250,9 +333,18 @@ export function ReturnPage() {
         variant: "secondary",
       };
     } else if (endDate && endDate < today) {
-      return { type: "overdue", label: "Terlambat", variant: "destructive" };
+      return {
+        type: "overdue",
+        label: "Terlambat",
+        variant: "destructive",
+        showAlert: true,
+      };
     } else {
-      return { type: "active", label: "Sedang Dipinjam", variant: "default" };
+      return {
+        type: "active",
+        label: "Sedang Dipinjam",
+        variant: "default",
+      };
     }
   };
 
@@ -271,6 +363,32 @@ export function ReturnPage() {
               : "Lihat status pengembalian peminjaman Anda"}
           </p>
         </div>
+        {statusFilter === "pending" && stats.total > 0 && (
+          <div className="flex gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="text-sm text-muted-foreground">Total</div>
+            </div>
+            {stats.overdue > 0 && (
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">
+                  {stats.overdue}
+                </div>
+                <div className="text-sm text-muted-foreground">Terlambat</div>
+              </div>
+            )}
+            {stats.today > 0 && (
+              <div className="text-center">
+                <div className="text-2xl font-bold text-amber-600">
+                  {stats.today}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Jatuh Tempo Hari Ini
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       <Card>
