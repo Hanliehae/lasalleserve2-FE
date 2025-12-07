@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+// src/pages/dashboard-page.js
+import { useMemo, useEffect, useState } from "react";
 import {
   AlertTriangle,
   Calendar,
@@ -17,7 +18,8 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { useAuth } from "../context/auth-context.jsx";
-import { getMockDashboardStats } from "../lib/mock-data.js";
+import { dashboardService } from "../lib/services/dashboardService";
+import { toast } from "sonner";
 
 const STAT_TEMPLATES = {
   totalAssets: { title: "Total Aset", icon: Package, color: "text-blue-600" },
@@ -70,40 +72,48 @@ const QUICK_ACTIONS = {
     {
       title: "Ajukan Peminjaman Baru",
       description: "Pilih aset dan buat permintaan peminjaman",
+      path: "/loans",
     },
     {
       title: "Lapor Kerusakan",
       description: "Laporkan kerusakan aset yang ditemukan",
+      path: "/reports",
     },
   ],
   mahasiswa: [
     {
       title: "Ajukan Peminjaman Baru",
       description: "Pilih aset dan buat permintaan peminjaman",
+      path: "/loans",
     },
     {
       title: "Lapor Kerusakan",
       description: "Laporkan kerusakan aset yang ditemukan",
+      path: "/reports",
     },
   ],
   dosen: [
     {
       title: "Ajukan Peminjaman Baru",
       description: "Pilih aset dan buat permintaan peminjaman",
+      path: "/loans",
     },
     {
       title: "Lapor Kerusakan",
       description: "Laporkan kerusakan aset yang ditemukan",
+      path: "/reports",
     },
   ],
   staf: [
     {
       title: "Ajukan Peminjaman Baru",
       description: "Pilih aset dan buat permintaan peminjaman",
+      path: "/loans",
     },
     {
       title: "Lapor Kerusakan",
       description: "Laporkan kerusakan aset yang ditemukan",
+      path: "/reports",
     },
   ],
   staf_buf: [
@@ -112,7 +122,6 @@ const QUICK_ACTIONS = {
       description: "Review dan approve permintaan peminjaman",
       path: "/loans",
     },
-
     {
       title: "Proses Pengembalian",
       description: "Kelola proses pengembalian aset",
@@ -151,10 +160,12 @@ const QUICK_ACTIONS = {
     {
       title: "Ajukan Peminjaman Baru",
       description: "Pilih aset dan buat permintaan peminjaman",
+      path: "/loans",
     },
     {
       title: "Lapor Kerusakan",
       description: "Laporkan kerusakan aset yang ditemukan",
+      path: "/reports",
     },
   ],
 };
@@ -185,7 +196,30 @@ const ACTIVITY_LOGS = [
 export function DashboardPage() {
   const { user } = useAuth();
   const role = user?.role ?? "default";
-  const stats = getMockDashboardStats(role);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const result = await dashboardService.getStats();
+
+      if (result.status === "success") {
+        setStats(result.data.stats || {});
+      } else {
+        toast.error(result.message || "Gagal memuat data dashboard");
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      toast.error("Terjadi kesalahan saat memuat data dashboard");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const statCards = useMemo(() => {
     const keys = ROLE_STAT_KEYS[role] ?? ROLE_STAT_KEYS.default;
@@ -206,6 +240,12 @@ export function DashboardPage() {
 
   const quickActions = QUICK_ACTIONS[role] ?? QUICK_ACTIONS.default;
 
+  const handleQuickAction = (action) => {
+    if (action.path) {
+      window.location.href = action.path;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header>
@@ -216,19 +256,32 @@ export function DashboardPage() {
       </header>
 
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {statCards.map(({ key, title, value, Icon, color }) => (
-          <Card key={key}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-muted-foreground text-sm">
-                {title}
-              </CardTitle>
-              <Icon className={`size-5 ${color}`} />
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold">{value}</p>
-            </CardContent>
-          </Card>
-        ))}
+        {loading
+          ? // Loading skeleton
+            Array.from({ length: 4 }).map((_, index) => (
+              <Card key={index}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded"></div>
+                  <div className="h-4 w-4 bg-muted animate-pulse rounded"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-8 w-16 bg-muted animate-pulse rounded"></div>
+                </CardContent>
+              </Card>
+            ))
+          : statCards.map(({ key, title, value, Icon, color }) => (
+              <Card key={key}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-muted-foreground text-sm">
+                    {title}
+                  </CardTitle>
+                  <Icon className={`size-5 ${color}`} />
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-semibold">{value}</p>
+                </CardContent>
+              </Card>
+            ))}
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
@@ -243,7 +296,8 @@ export function DashboardPage() {
                 key={action.title}
                 type="button"
                 variant="outline"
-                className="h-auto flex w-full flex-col items-start gap-1 p-3 text-left"
+                className="h-auto flex w-full flex-col items-start gap-1 p-3 text-left hover:bg-accent"
+                onClick={() => handleQuickAction(action)}
               >
                 <span className="font-medium">{action.title}</span>
                 <span className="text-sm text-muted-foreground">

@@ -1,6 +1,7 @@
-// src/pages/assets-page.jsx
+// src/pages/assets-page.js - UPDATE untuk real backend
 import { useMemo, useState, useEffect } from "react";
 import { Edit, Package, Plus, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -17,7 +18,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -39,9 +39,8 @@ import {
 import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/auth-context.jsx";
 import { assetService } from "../lib/services/assetService";
-import { toast } from "sonner";
 
-const MANAGER_ROLES = ["admin_buf"];
+const MANAGER_ROLES = ["admin_buf", "kepala_buf"];
 
 export function AssetsPage() {
   const { user } = useAuth();
@@ -52,6 +51,7 @@ export function AssetsPage() {
   const [editingAsset, setEditingAsset] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const canManageAssets = MANAGER_ROLES.includes(user?.role ?? "");
 
@@ -68,14 +68,122 @@ export function AssetsPage() {
       if (result.status === "success") {
         setAssets(result.data.assets || []);
       } else {
-        toast.error("Gagal memuat data aset");
+        toast.error(result.message || "Gagal memuat data aset");
       }
     } catch (error) {
       console.error("Error fetching assets:", error);
-      toast.error("Terjadi kesalahan saat memuat data aset");
+      toast.error(error.message || "Terjadi kesalahan saat memuat data aset");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearchSubmit = async () => {
+    try {
+      setSearchLoading(true);
+      const result = await assetService.getAssets(searchTerm, categoryFilter);
+
+      if (result.status === "success") {
+        setAssets(result.data.assets || []);
+      } else {
+        toast.error(result.message || "Gagal mencari aset");
+      }
+    } catch (error) {
+      console.error("Error searching assets:", error);
+      toast.error("Terjadi kesalahan saat mencari aset");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleCategoryChange = (value) => {
+    setCategoryFilter(value);
+    // Trigger fetch with new category filter
+    setTimeout(() => handleSearchSubmit(), 100);
+  };
+
+  const handleSubmitAsset = async (formData) => {
+    try {
+      let result;
+
+      if (editingAsset) {
+        result = await assetService.updateAsset(editingAsset.id, formData);
+        if (result.status === "success") {
+          toast.success(result.message || "Aset berhasil diperbarui");
+        } else {
+          toast.error(result.message || "Gagal memperbarui aset");
+          return;
+        }
+      } else {
+        result = await assetService.createAsset(formData);
+        if (result.status === "success") {
+          toast.success(result.message || "Aset berhasil ditambahkan");
+        } else {
+          toast.error(result.message || "Gagal menambahkan aset");
+          return;
+        }
+      }
+
+      // Refresh data
+      fetchAssets();
+      setIsDialogOpen(false);
+      setEditingAsset(null);
+    } catch (error) {
+      console.error("Error saving asset:", error);
+      toast.error(error.message || "Terjadi kesalahan saat menyimpan aset");
+    }
+  };
+
+  const handleDeleteAsset = async (id) => {
+    if (!window.confirm("Yakin ingin menghapus aset ini?")) return;
+
+    try {
+      const result = await assetService.deleteAsset(id);
+
+      if (result.status === "success") {
+        toast.success("Aset berhasil dihapus");
+        fetchAssets(); // Refresh data
+      } else {
+        toast.error(result.message || "Gagal menghapus aset");
+      }
+    } catch (error) {
+      console.error("Error deleting asset:", error);
+      toast.error(error.message || "Terjadi kesalahan saat menghapus aset");
+    }
+  };
+
+  const openCreateDialog = () => {
+    setEditingAsset(null);
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (asset) => {
+    // Prepare asset data for form
+    const assetForEdit = {
+      ...asset,
+      baik:
+        asset.baik ||
+        asset.conditions?.find((c) => c.condition === "baik")?.quantity ||
+        0,
+      rusakRingan:
+        asset.rusakRingan ||
+        asset.conditions?.find((c) => c.condition === "rusak_ringan")
+          ?.quantity ||
+        0,
+      rusakBerat:
+        asset.rusakBerat ||
+        asset.conditions?.find((c) => c.condition === "rusak_berat")
+          ?.quantity ||
+        0,
+    };
+
+    setEditingAsset(assetForEdit);
+    setIsDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setEditingAsset(null);
+    setIsDialogOpen(false);
   };
 
   const filteredAssets = useMemo(() => {
@@ -89,86 +197,6 @@ export function AssetsPage() {
       return matchesSearch && matchesCategory;
     });
   }, [assets, searchTerm, categoryFilter]);
-
-  const handleSearchChange = (event) => setSearchTerm(event.target.value);
-  const handleCategoryChange = (value) => {
-    setCategoryFilter(value);
-    fetchAssets(); // Refresh data when category changes
-  };
-
-  const handleAddAsset = async (payload) => {
-    try {
-      const result = await assetService.createAsset(payload);
-
-      if (result.status === "success") {
-        setAssets((prev) => [...prev, result.data.asset]);
-        toast.success("Aset berhasil ditambahkan");
-        setIsDialogOpen(false);
-      } else {
-        toast.error(result.message || "Gagal menambahkan aset");
-      }
-    } catch (error) {
-      console.error("Error adding asset:", error);
-      toast.error("Terjadi kesalahan saat menambahkan aset");
-    }
-  };
-
-  const handleUpdateAsset = async (updates) => {
-    if (!editingAsset) return;
-
-    try {
-      const result = await assetService.updateAsset(editingAsset.id, updates);
-
-      if (result.status === "success") {
-        setAssets((prev) =>
-          prev.map((asset) =>
-            asset.id === editingAsset.id ? { ...asset, ...updates } : asset
-          )
-        );
-        toast.success("Aset berhasil diperbarui");
-        setEditingAsset(null);
-        setIsDialogOpen(false);
-      } else {
-        toast.error(result.message || "Gagal memperbarui aset");
-      }
-    } catch (error) {
-      console.error("Error updating asset:", error);
-      toast.error("Terjadi kesalahan saat memperbarui aset");
-    }
-  };
-
-  const handleDeleteAsset = async (id) => {
-    if (!window.confirm("Yakin ingin menghapus aset ini?")) return;
-
-    try {
-      const result = await assetService.deleteAsset(id);
-
-      if (result.status === "success") {
-        setAssets((prev) => prev.filter((asset) => asset.id !== id));
-        toast.success("Aset berhasil dihapus");
-      } else {
-        toast.error(result.message || "Gagal menghapus aset");
-      }
-    } catch (error) {
-      console.error("Error deleting asset:", error);
-      toast.error("Terjadi kesalahan saat menghapus aset");
-    }
-  };
-
-  const openCreateDialog = () => {
-    setEditingAsset(null);
-    setIsDialogOpen(true);
-  };
-
-  const openEditDialog = (asset) => {
-    setEditingAsset(asset);
-    setIsDialogOpen(true);
-  };
-
-  const closeDialog = () => {
-    setEditingAsset(null);
-    setIsDialogOpen(false);
-  };
 
   return (
     <div className="space-y-6">
@@ -195,14 +223,18 @@ export function AssetsPage() {
               <Input
                 placeholder="Cari aset atau lokasi..."
                 value={searchTerm}
-                onChange={handleSearchChange}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm"
                 onKeyPress={(e) => {
-                  if (e.key === "Enter") fetchAssets();
+                  if (e.key === "Enter") handleSearchSubmit();
                 }}
               />
-              <Button onClick={fetchAssets} variant="outline">
-                Cari
+              <Button
+                onClick={handleSearchSubmit}
+                variant="outline"
+                disabled={searchLoading}
+              >
+                {searchLoading ? "Mencari..." : "Cari"}
               </Button>
             </div>
             <Select value={categoryFilter} onValueChange={handleCategoryChange}>
@@ -234,7 +266,7 @@ export function AssetsPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={closeDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {editingAsset ? "Edit Aset" : "Tambah Aset Baru"}
@@ -247,7 +279,7 @@ export function AssetsPage() {
           </DialogHeader>
           <AssetForm
             initialData={editingAsset}
-            onSubmit={editingAsset ? handleUpdateAsset : handleAddAsset}
+            onSubmit={handleSubmitAsset}
             onCancel={closeDialog}
           />
         </DialogContent>
@@ -260,6 +292,7 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
   if (assets.length === 0) {
     return (
       <div className="rounded-md border p-8 text-center text-muted-foreground">
+        <Package className="mx-auto size-12 mb-4" />
         Tidak ada aset ditemukan
       </div>
     );
@@ -274,23 +307,24 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
               <TableHead>Nama Aset</TableHead>
               <TableHead>Kategori</TableHead>
               <TableHead>Lokasi</TableHead>
+              <TableHead>Tahun Ajaran</TableHead>
+              <TableHead>Semester</TableHead>
               <TableHead>Total Stok</TableHead>
               <TableHead>Tersedia (Baik)</TableHead>
-              <TableHead>Kondisi (Baik/Ringan/Berat)</TableHead>
+              <TableHead>Kondisi</TableHead>
               {canManage && <TableHead>Aksi</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {assets.map((asset) => {
-              // Hitung jumlah per kondisi
-              const conditions = asset.conditions || [];
               const baik =
-                conditions.find((c) => c.condition === "baik")?.quantity || 0;
+                asset.conditions?.find((c) => c.condition === "baik")
+                  ?.quantity || 0;
               const rusakRingan =
-                conditions.find((c) => c.condition === "rusak_ringan")
+                asset.conditions?.find((c) => c.condition === "rusak_ringan")
                   ?.quantity || 0;
               const rusakBerat =
-                conditions.find((c) => c.condition === "rusak_berat")
+                asset.conditions?.find((c) => c.condition === "rusak_berat")
                   ?.quantity || 0;
 
               return (
@@ -299,9 +333,9 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
                     <div className="flex items-center gap-2">
                       <Package className="size-4 text-muted-foreground" />
                       <div>
-                        <p>{asset.name}</p>
+                        <p className="font-medium">{asset.name}</p>
                         {asset.description && (
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-muted-foreground truncate max-w-xs">
                             {asset.description}
                           </p>
                         )}
@@ -310,18 +344,24 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
                   </TableCell>
                   <TableCell className="capitalize">{asset.category}</TableCell>
                   <TableCell>{asset.location}</TableCell>
-                  <TableCell>{asset.totalStock}</TableCell>
+                  <TableCell>{asset.acquisitionYear || "-"}</TableCell>
+                  <TableCell>{asset.semester || "-"}</TableCell>
+                  <TableCell className="font-bold">
+                    {asset.totalStock}
+                  </TableCell>
                   <TableCell>
                     <span
                       className={
-                        asset.availableStock === 0 ? "text-red-600" : undefined
+                        asset.availableStock === 0
+                          ? "text-red-600 font-bold"
+                          : "font-bold"
                       }
                     >
                       {asset.availableStock}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
+                    <div className="flex flex-wrap gap-1">
                       <Badge variant="default" className="text-xs">
                         Baik: {baik}
                       </Badge>
@@ -364,171 +404,226 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
 }
 
 function AssetForm({ initialData, onSubmit, onCancel }) {
-  // Inisialisasi conditions
-  const initialConditions = initialData?.conditions || [
-    { condition: "baik", quantity: 0 },
-    { condition: "rusak_ringan", quantity: 0 },
-    { condition: "rusak_berat", quantity: 0 },
-  ];
+  const currentYear = new Date().getFullYear();
 
   const [formData, setFormData] = useState(
     initialData
       ? {
           ...initialData,
-          conditions: initialConditions,
+          baik:
+            initialData.conditions?.find((c) => c.condition === "baik")
+              ?.quantity || 0,
+          rusakRingan:
+            initialData.conditions?.find((c) => c.condition === "rusak_ringan")
+              ?.quantity || 0,
+          rusakBerat:
+            initialData.conditions?.find((c) => c.condition === "rusak_berat")
+              ?.quantity || 0,
         }
       : {
           name: "",
           category: "fasilitas",
           location: "",
+          acquisitionYear: `${currentYear}/${currentYear + 1}`,
+          semester: "Ganjil",
           description: "",
-          acquisitionYear: new Date().getFullYear().toString(),
-          conditions: initialConditions,
+          baik: 0,
+          rusakRingan: 0,
+          rusakBerat: 0,
         }
   );
 
-  const handleConditionChange = (condition, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      conditions: prev.conditions.map((cond) =>
-        cond.condition === condition
-          ? { ...cond, quantity: parseInt(value) || 0 }
-          : cond
-      ),
-    }));
+  const handleChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+
+    // Prepare conditions array
+    const conditions = [
+      { condition: "baik", quantity: parseInt(formData.baik) || 0 },
+      {
+        condition: "rusak_ringan",
+        quantity: parseInt(formData.rusakRingan) || 0,
+      },
+      {
+        condition: "rusak_berat",
+        quantity: parseInt(formData.rusakBerat) || 0,
+      },
+    ];
+
+    // Calculate total stock
+    const totalStock = conditions.reduce((sum, cond) => sum + cond.quantity, 0);
+
+    if (totalStock === 0) {
+      alert("Total stok harus lebih dari 0");
+      return;
+    }
+
+    const submitData = {
+      ...formData,
+      conditions,
+    };
+
+    onSubmit(submitData);
   };
 
-  // Hitung total stok
-  const totalStock = formData.conditions.reduce(
-    (sum, cond) => sum + cond.quantity,
-    0
-  );
+  // Calculate total stock
+  const totalStock =
+    (parseInt(formData.baik) || 0) +
+    (parseInt(formData.rusakRingan) || 0) +
+    (parseInt(formData.rusakBerat) || 0);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Nama Aset</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Nama Aset *</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => handleChange("name", e.target.value)}
+            placeholder="Contoh: Proyektor LCD 01"
+            required
+          />
+        </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="category">Kategori *</Label>
+          <Select
+            value={formData.category}
+            onValueChange={(value) => handleChange("category", value)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fasilitas">Fasilitas</SelectItem>
+              <SelectItem value="ruangan">Ruangan</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="location">Lokasi *</Label>
         <Input
-          value={formData.name}
-          onChange={(event) =>
-            setFormData({ ...formData, name: event.target.value })
-          }
-          placeholder="Contoh: Proyektor LCD 01"
+          id="location"
+          value={formData.location}
+          onChange={(e) => handleChange("location", e.target.value)}
+          placeholder="Gedung Agustinus, Lantai 3"
           required
         />
       </div>
-      <div className="space-y-2">
-        <Label>Kategori</Label>
-        <Select
-          value={formData.category}
-          onValueChange={(value) =>
-            setFormData({ ...formData, category: value })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fasilitas">Fasilitas</SelectItem>
-            <SelectItem value="ruangan">Ruangan</SelectItem>
-          </SelectContent>
-        </Select>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="acquisitionYear">Tahun Ajaran</Label>
+          <Select
+            value={formData.acquisitionYear}
+            onValueChange={(value) => handleChange("acquisitionYear", value)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={`${currentYear - 1}/${currentYear}`}>
+                {currentYear - 1}/{currentYear}
+              </SelectItem>
+              <SelectItem value={`${currentYear}/${currentYear + 1}`}>
+                {currentYear}/{currentYear + 1}
+              </SelectItem>
+              <SelectItem value={`${currentYear + 1}/${currentYear + 2}`}>
+                {currentYear + 1}/{currentYear + 2}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="semester">Semester</Label>
+          <Select
+            value={formData.semester}
+            onValueChange={(value) => handleChange("semester", value)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Ganjil">Ganjil</SelectItem>
+              <SelectItem value="Genap">Genap</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>Lokasi</Label>
-        <Input
-          value={formData.location}
-          onChange={(event) =>
-            setFormData({ ...formData, location: event.target.value })
-          }
-          placeholder="Gedung Agustinus"
-          required="*"
-        />
-      </div>
+      <div className="space-y-4 border rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <Label className="text-lg">Kondisi dan Stok</Label>
+          <div className="text-sm text-muted-foreground">
+            Total Stok: <span className="font-bold text-lg">{totalStock}</span>
+          </div>
+        </div>
 
-      <div className="space-y-2">
-        <Label>Tahun Ajaran</Label>
-        <Input
-          value={formData.acquisitionYear}
-          onChange={(event) =>
-            setFormData({ ...formData, acquisitionYear: event.target.value })
-          }
-          placeholder="Contoh: 2024/2025"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Semester</Label>
-        <Select
-          value={formData.semester}
-          onValueChange={(value) =>
-            setFormData({ ...formData, semester: value })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Ganjil">Ganjil</SelectItem>
-            <SelectItem value="Genap">Genap</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-4">
-        <Label>Kondisi dan Jumlah</Label>
-
-        {formData.conditions.map((cond) => (
-          <div key={cond.condition} className="flex items-center gap-4">
-            <div className="w-32">
-              <span className="capitalize">
-                {cond.condition.replace("_", " ")}
-              </span>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="baik">Baik *</Label>
             <Input
+              id="baik"
               type="number"
               min="0"
-              value={cond.quantity}
-              onChange={(e) =>
-                handleConditionChange(cond.condition, e.target.value)
-              }
-              className="flex-1"
+              value={formData.baik}
+              onChange={(e) => handleChange("baik", e.target.value)}
+              placeholder="0"
+              required
             />
-            <span className="text-sm text-muted-foreground">unit</span>
           </div>
-        ))}
 
-        <div className="pt-4 border-t">
-          <div className="flex justify-between items-center">
-            <span className="font-medium">Total Stok:</span>
-            <span className="text-2xl font-bold">{totalStock}</span>
+          <div className="space-y-2">
+            <Label htmlFor="rusakRingan">Rusak Ringan</Label>
+            <Input
+              id="rusakRingan"
+              type="number"
+              min="0"
+              value={formData.rusakRingan}
+              onChange={(e) => handleChange("rusakRingan", e.target.value)}
+              placeholder="0"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="rusakBerat">Rusak Berat</Label>
+            <Input
+              id="rusakBerat"
+              type="number"
+              min="0"
+              value={formData.rusakBerat}
+              onChange={(e) => handleChange("rusakBerat", e.target.value)}
+              placeholder="0"
+            />
           </div>
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Deskripsi</Label>
+        <Label htmlFor="description">Deskripsi</Label>
         <Textarea
+          id="description"
           value={formData.description}
-          onChange={(event) =>
-            setFormData({ ...formData, description: event.target.value })
-          }
+          onChange={(e) => handleChange("description", e.target.value)}
+          placeholder="Deskripsi aset..."
           rows={3}
         />
       </div>
 
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Batal
         </Button>
-        <Button type="submit">Simpan</Button>
+        <Button type="submit">
+          {initialData ? "Update Aset" : "Tambah Aset"}
+        </Button>
       </div>
     </form>
   );

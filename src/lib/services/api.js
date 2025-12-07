@@ -8,6 +8,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 seconds timeout
 });
 
 // Interceptor untuk request
@@ -17,23 +18,51 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Debug log
+    console.log(`🚀 ${config.method.toUpperCase()} ${config.url}`, config.params || '');
+    
     return config;
   },
   (error) => {
+    console.error('❌ Request error:', error);
     return Promise.reject(error);
   }
 );
 
 // Interceptor untuk response
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`✅ ${response.status} ${response.config.method.toUpperCase()} ${response.config.url}`);
+    return response;
+  },
   (error) => {
+    console.error('❌ Response error:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      message: error.response?.data?.message || error.message,
+      data: error.response?.data
+    });
+
     if (error.response?.status === 401) {
+      console.log('🔒 Token expired, redirecting to login');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      
+      // Only redirect if not on login page
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
     }
-    return Promise.reject(error);
+
+    // Return a consistent error format
+    return Promise.reject({
+      status: 'error',
+      message: error.response?.data?.message || error.message || 'Terjadi kesalahan',
+      data: error.response?.data,
+      code: error.response?.status
+    });
   }
 );
 
