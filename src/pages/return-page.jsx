@@ -432,6 +432,8 @@ export function ReturnPage() {
                     <TableHead>Detail Aset</TableHead>
                     <TableHead>Tanggal Mulai</TableHead>
                     <TableHead>Tanggal Selesai</TableHead>
+                    <TableHead>Waktu Mulai</TableHead>
+                    <TableHead>Waktu Selesai</TableHead>
                     <TableHead>Status</TableHead>
                     {canApprove && <TableHead>Aksi</TableHead>}
                   </TableRow>
@@ -596,12 +598,22 @@ export function ReturnPage() {
                       "id-ID"
                     )}
                   </p>
+                  <div className="flex items-center gap-2">
+                    <Clock className="size-4 text-muted-foreground" />
+                    {selectedLoan.startTime || "08:00"}
+                  </div>
                 </div>
                 <div>
                   <Label>Tanggal Selesai</Label>
                   <p>
                     {new Date(selectedLoan.endDate).toLocaleDateString("id-ID")}
                   </p>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Clock className="size-4 text-muted-foreground" />
+                      {selectedLoan.endTime || "17:00"}
+                    </div>
+                  </TableCell>
                 </div>
               </div>
 

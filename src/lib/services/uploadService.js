@@ -1,8 +1,8 @@
-
+// src/lib/services/uploadService.js
 import api from './api';
 
 export const uploadService = {
-  async uploadImage(file) {
+  async uploadFile(file) {
     const formData = new FormData();
     formData.append('file', file);
 
@@ -14,7 +14,7 @@ export const uploadService = {
     return response.data;
   },
 
-  async deleteImage(publicId) {
+  async deleteFile(publicId) {
     const response = await api.delete(`/upload/${publicId}`);
     return response.data;
   }
