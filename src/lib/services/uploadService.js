@@ -1,4 +1,4 @@
-// File baru: src/lib/services/uploadService.js
+
 import api from './api';
 
 export const uploadService = {

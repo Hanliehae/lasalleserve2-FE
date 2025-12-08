@@ -607,7 +607,7 @@ function ReportForm({ assets, onSubmit, onCancel }) {
         </Select>
       </div>
 
-      <div className="space-y-2">
+      {/* <div className="space-y-2">
         <Label>Prioritas *</Label>
         <Select
           value={formData.priority}
@@ -626,7 +626,7 @@ function ReportForm({ assets, onSubmit, onCancel }) {
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </div> */}
 
       <div className="space-y-2">
         <Label>Deskripsi Kerusakan *</Label>
