@@ -589,7 +589,7 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleAttachmentChange = async (event) => {
+  const handleAttachmentChange = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -607,39 +607,25 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
       return;
     }
 
+    // Simpan file untuk diupload nanti saat submit
     setAttachmentFile(file);
+    setErrors((prev) => ({ ...prev, attachment: "" }));
 
+    // Generate preview untuk semua tipe file
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setAttachmentPreview(reader.result);
       };
       reader.readAsDataURL(file);
+    } else if (file.type === "application/pdf") {
+      // Untuk PDF, tampilkan ikon dengan nama file
+      setAttachmentPreview("pdf");
     } else {
       setAttachmentPreview("");
     }
 
-    // upload file
-    try {
-      setUploadingAttachment(true);
-      const result = await uploadService.uploadImage(file);
-
-      if (result.status === "success") {
-        setFormData((prev) => ({
-          ...prev,
-          attachmentUrl: result.data.url,
-        }));
-        setErrors((prev) => ({ ...prev, attachment: "" }));
-        toast.success("Surat izin berhasil diunggah");
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error("Gagal mengunggah surat izin");
-      setAttachmentFile(null);
-      setAttachmentPreview("");
-    } finally {
-      setUploadingAttachment(false);
-    }
+    toast.success("File berhasil dipilih. Akan diunggah saat mengajukan peminjaman.");
   };
 
   const removeAttachment = () => {
@@ -656,6 +642,34 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
       return;
     }
 
+    let attachmentUrl = null;
+
+    // Upload file jika ada attachment yang perlu diunggah
+    if (attachmentFile && requiresPermissionLetter) {
+      try {
+        setUploadingAttachment(true);
+        toast.info("Mengunggah surat izin...");
+        
+        const uploadResult = await uploadService.uploadImage(attachmentFile);
+        
+        if (uploadResult.status === "success") {
+          attachmentUrl = uploadResult.data.url;
+          toast.success("Surat izin berhasil diunggah");
+        } else {
+          toast.error("Gagal mengunggah surat izin");
+          setUploadingAttachment(false);
+          return;
+        }
+      } catch (error) {
+        console.error("Upload error:", error);
+        toast.error("Gagal mengunggah surat izin: " + error.message);
+        setUploadingAttachment(false);
+        return;
+      } finally {
+        setUploadingAttachment(false);
+      }
+    }
+
     const payload = {
       roomId: formData.roomId,
       facilities: formData.facilities.map((f) => ({
@@ -669,7 +683,7 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
       purpose: formData.purpose,
       academicYear: formData.academicYear,
       semester: formData.semester,
-      attachmentUrl: formData.attachmentUrl || null,
+      attachmentUrl: attachmentUrl,
     };
 
     const success = await onSubmit(payload);
@@ -1015,11 +1029,19 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
             {attachmentPreview && (
               <div className="mt-4">
                 <p className="text-sm font-medium mb-2">Preview:</p>
-                <img
-                  src={attachmentPreview}
-                  alt="Preview surat izin"
-                  className="max-h-48 mx-auto rounded border"
-                />
+                {attachmentPreview === "pdf" ? (
+                  <div className="flex flex-col items-center justify-center py-4 bg-muted/30 rounded-lg">
+                    <FileText className="size-16 text-red-500 mb-2" />
+                    <p className="text-sm font-medium text-muted-foreground">Dokumen PDF</p>
+                    <p className="text-xs text-muted-foreground">{attachmentFile?.name}</p>
+                  </div>
+                ) : (
+                  <img
+                    src={attachmentPreview}
+                    alt="Preview surat izin"
+                    className="max-h-48 mx-auto rounded border"
+                  />
+                )}
               </div>
             )}
           </div>
@@ -1030,16 +1052,15 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
         )}
       </div>
 
-      {/* Alert informasi */}
-      {requiresPermissionLetter && formData.attachmentUrl && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 text-green-700">
-            <CheckCircle className="size-5" />
-            <span className="font-medium">Surat izin sudah terlampir</span>
+      {/* Alert informasi - file siap diupload */}
+      {requiresPermissionLetter && attachmentFile && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 text-amber-700">
+            <AlertCircle className="size-5" />
+            <span className="font-medium">Surat izin siap diunggah</span>
           </div>
-          <p className="text-sm text-green-600 mt-1">
-            Peminjaman Anda di atas jam 17:00 sudah memenuhi syarat dengan surat
-            izin.
+          <p className="text-sm text-amber-600 mt-1">
+            File akan diunggah bersamaan saat Anda menekan tombol "Ajukan Peminjaman".
           </p>
         </div>
       )}
