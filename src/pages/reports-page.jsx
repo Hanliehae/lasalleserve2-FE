@@ -356,6 +356,7 @@ function ReportsTable({
               <TableHead>Status</TableHead>
               <TableHead>Tanggal</TableHead>
               <TableHead>Detail</TableHead>
+              <TableHead>Gambar</TableHead>
               {isKepalaBUF && <TableHead>Aksi</TableHead>}
             </TableRow>
           </TableHeader>
@@ -441,6 +442,15 @@ function ReportsTable({
                     </div>
                   </TableCell>
                 )}
+                <TableCell>
+  {report.photoUrl && (
+    <img 
+      src={report.photoUrl} 
+      alt={`Kerusakan ${report.assetName}`}
+      className="h-12 w-12 object-cover rounded"
+    />
+  )}
+</TableCell>
               </TableRow>
             ))}
           </TableBody>

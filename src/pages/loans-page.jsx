@@ -966,6 +966,8 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
     return hours >= 17;
   };
 
+
+
   const requiresPermissionLetter = isAfter5PM(formData.endTime);
 
   // Filter hanya ruangan
@@ -1009,6 +1011,7 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
 
   const handleAttachmentChange = (event) => {
     const file = event.target.files[0];
@@ -1106,6 +1109,15 @@ const handleSubmit = async (event) => {
     semester: formData.semester,
     attachmentUrl: attachmentUrl,
   };
+
+// Validasi waktu selesai > waktu mulai
+const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
+const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
+
+if (endDateTime <= startDateTime) {
+  toast.error('Waktu selesai harus setelah waktu mulai');
+  return;
+}
 
   const success = await onSubmit(payload);
   if (success) {
