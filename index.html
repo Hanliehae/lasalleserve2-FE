@@ -10,4 +10,25 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
+<script>
+  // Fix untuk share-modal.js error
+  document.addEventListener('DOMContentLoaded', function() {
+    // Defer execution of any modal scripts
+    setTimeout(function() {
+      const modalTriggers = document.querySelectorAll('[data-modal-target]');
+      modalTriggers.forEach(trigger => {
+        if (trigger) {
+          trigger.addEventListener('click', function(e) {
+            e.preventDefault();
+            const modalId = this.getAttribute('data-modal-target');
+            const modal = document.getElementById(modalId);
+            if (modal) {
+              modal.style.display = 'block';
+            }
+          });
+        }
+      });
+    }, 1000);
+  });
+</script>
 </html>

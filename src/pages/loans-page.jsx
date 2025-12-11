@@ -10,13 +10,18 @@ import {
   AlertCircle,
   Upload,
   FileText,
+  Clock,
+  AlertTriangle,
+  Filter,
+  BarChart3,
+  Eye
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "../context/auth-context.jsx";
 import { loanService } from "../lib/services/loanService";
 import { assetService } from "../lib/services/assetService";
-import { uploadService } from "../lib/services/uploadService"; // Tambahkan import ini
+import { uploadService } from "../lib/services/uploadService";
 
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -53,18 +58,20 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Textarea } from "../components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 
 const CREATOR_ROLES = ["mahasiswa", "dosen", "staf", "civitas"];
 const APPROVER_ROLES = ["staf_buf", "admin_buf"];
 
 const STATUS_BADGES = {
-  menunggu: { variant: "secondary", label: "Menunggu" },
-  disetujui: { variant: "default", label: "Disetujui" },
-  ditolak: { variant: "destructive", label: "Ditolak" },
-  selesai: { variant: "outline", label: "Selesai" },
+  menunggu: { variant: "secondary", label: "Menunggu", color: "bg-yellow-100 text-yellow-800" },
+  disetujui: { variant: "default", label: "Disetujui", color: "bg-green-100 text-green-800" },
+  ditolak: { variant: "destructive", label: "Ditolak", color: "bg-red-100 text-red-800" },
+  selesai: { variant: "outline", label: "Selesai", color: "bg-gray-100 text-gray-800" },
   menunggu_pengembalian: {
     variant: "secondary",
     label: "Menunggu Pengembalian",
+    color: "bg-yellow-100 text-yellow-800"
   },
 };
 
@@ -80,11 +87,12 @@ export function LoansPage() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [updatingLoanId, setUpdatingLoanId] = useState(null);
+  const [showOnlyNew, setShowOnlyNew] = useState(false);
+  const [activeTab, setActiveTab] = useState("all");
 
   const canApprove = APPROVER_ROLES.includes(user?.role ?? "");
   const canCreateLoan = CREATOR_ROLES.includes(user?.role ?? "");
 
-  // Fetch data on component mount
   useEffect(() => {
     fetchLoans();
     fetchAssets();
@@ -96,7 +104,27 @@ export function LoansPage() {
       const result = await loanService.getLoans(searchTerm, statusFilter);
 
       if (result.status === "success") {
-        setLoans(result.data.loans || []);
+        // Sort loans berdasarkan priority order (sudah dari backend, tapi kita sort lagi untuk memastikan)
+        const sortedLoans = [...result.data.loans].sort((a, b) => {
+          const priorityOrder = {
+            'menunggu': 1,
+            'disetujui': 2,
+            'menunggu_pengembalian': 3,
+            'selesai': 4,
+            'ditolak': 5
+          };
+          
+          const aPriority = priorityOrder[a.status] || 6;
+          const bPriority = priorityOrder[b.status] || 6;
+          
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+        
+        setLoans(sortedLoans);
       } else {
         toast.error(result.message || "Gagal memuat data peminjaman");
       }
@@ -125,6 +153,11 @@ export function LoansPage() {
 
   const handleStatusChange = (value) => {
     setStatusFilter(value);
+    if (value === 'menunggu') {
+      setShowOnlyNew(true);
+    } else {
+      setShowOnlyNew(false);
+    }
     fetchLoans();
   };
 
@@ -198,15 +231,34 @@ export function LoansPage() {
     }
   };
 
-  const renderStatusBadge = (status) => {
+  const renderStatusBadge = (status, isNew = false) => {
     const config = STATUS_BADGES[status] ?? STATUS_BADGES.menunggu;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <Badge variant={config.variant} className={config.color}>
+            {config.label}
+          </Badge>
+          {isNew && status === 'menunggu' && (
+            <Badge variant="default" className="bg-green-600 animate-pulse text-xs">
+              BARU
+            </Badge>
+          )}
+        </div>
+        {isNew && status === 'menunggu' && (
+          <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <Clock className="size-3" />
+            <span>Dalam 24 jam</span>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const filteredLoans = useMemo(() => {
-    const keyword = searchTerm.toLowerCase();
-
-    return loans.filter((loan) => {
+    let filtered = loans.filter((loan) => {
+      const keyword = searchTerm.toLowerCase();
       const matchesSearch =
         loan.borrowerName?.toLowerCase().includes(keyword) ||
         (loan.roomName && loan.roomName.toLowerCase().includes(keyword)) ||
@@ -219,16 +271,58 @@ export function LoansPage() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [loans, searchTerm, statusFilter]);
+
+    // Filter untuk hanya menampilkan yang baru (menunggu dan created_at dalam 24 jam)
+    if (showOnlyNew) {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      filtered = filtered.filter(loan => 
+        loan.status === 'menunggu' && 
+        new Date(loan.createdAt) > twentyFourHoursAgo
+      );
+    }
+
+    // Urutkan berdasarkan priority
+    return filtered.sort((a, b) => {
+      const priorityOrder = {
+        'menunggu': 1,
+        'disetujui': 2,
+        'menunggu_pengembalian': 3,
+        'selesai': 4,
+        'ditolak': 5
+      };
+      
+      const aPriority = priorityOrder[a.status] || 6;
+      const bPriority = priorityOrder[b.status] || 6;
+      
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+  }, [loans, searchTerm, statusFilter, showOnlyNew]);
+
+  // Hitung statistik
+  const stats = useMemo(() => ({
+    menunggu: loans.filter(l => l.status === 'menunggu').length,
+    disetujui: loans.filter(l => l.status === 'disetujui').length,
+    menungguPengembalian: loans.filter(l => l.status === 'menunggu_pengembalian').length,
+    selesai: loans.filter(l => l.status === 'selesai').length,
+    ditolak: loans.filter(l => l.status === 'ditolak').length,
+    baru: loans.filter(l => {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return l.status === 'menunggu' && new Date(l.createdAt) > twentyFourHoursAgo;
+    }).length
+  }), [loans]);
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1>Peminjaman Aset</h1>
+          <h1 className="text-3xl font-bold">Peminjaman Aset</h1>
           <p className="text-muted-foreground mt-2">
             {canApprove
-              ? "Kelola permintaan peminjaman aset"
+              ? "Kelola dan validasi permintaan peminjaman aset"
               : "Ajukan dan lihat status peminjaman Anda"}
           </p>
         </div>
@@ -237,7 +331,7 @@ export function LoansPage() {
           <div className="flex flex-wrap gap-2">
             <Dialog open={isRoomFormOpen} onOpenChange={setIsRoomFormOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button className="bg-yellow-500hover:bg-yellow-700">
                   <Plus className="mr-2 size-4" />
                   Pinjam Ruangan
                 </Button>
@@ -298,10 +392,72 @@ export function LoansPage() {
         )}
       </header>
 
+      {/* STATISTIK CEPAT */}
+      {canApprove && (
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <Card className="border-l-4 border-l-yellow-500">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-600">{stats.menunggu}</div>
+                <div className="text-sm text-muted-foreground">Menunggu</div>
+                {stats.baru > 0 && (
+                  <div className="text-xs text-green-600 mt-1">({stats.baru} baru)</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-green-500">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{stats.disetujui}</div>
+                <div className="text-sm text-muted-foreground">Disetujui</div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-blue-500">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats.menungguPengembalian}</div>
+                <div className="text-sm text-muted-foreground">Menunggu Kembali</div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-gray-500">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-600">{stats.selesai}</div>
+                <div className="text-sm text-muted-foreground">Selesai</div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-red-500">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">{stats.ditolak}</div>
+                <div className="text-sm text-muted-foreground">Ditolak</div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-purple-500">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold">{loans.length}</div>
+                <div className="text-sm text-muted-foreground">Total</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-1 items-center gap-2">
+            <div className="flex flex-1 flex-wrap items-center gap-2">
               <Search className="size-5 text-muted-foreground" />
               <Input
                 value={searchTerm}
@@ -315,157 +471,395 @@ export function LoansPage() {
               <Button onClick={fetchLoans} variant="outline">
                 Cari
               </Button>
+              
+              {canApprove && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const newShowOnlyNew = !showOnlyNew;
+                    setShowOnlyNew(newShowOnlyNew);
+                    if (newShowOnlyNew) {
+                      setStatusFilter('menunggu');
+                    } else {
+                      setStatusFilter('all');
+                    }
+                  }}
+                  className={showOnlyNew ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : ''}
+                >
+                  <AlertTriangle className="mr-2 size-4" />
+                  {showOnlyNew ? 'Semua Status' : 'Hanya Menunggu'}
+                </Button>
+              )}
             </div>
-            <Select value={statusFilter} onValueChange={handleStatusChange}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Status peminjaman" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Status</SelectItem>
-                <SelectItem value="menunggu">Menunggu</SelectItem>
-                <SelectItem value="disetujui">Disetujui</SelectItem>
-                <SelectItem value="ditolak">Ditolak</SelectItem>
-                <SelectItem value="selesai">Selesai</SelectItem>
-                <SelectItem value="menunggu_pengembalian">
-                  Menunggu Pengembalian
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            
+            <div className="flex gap-2">
+              <Select value={statusFilter} onValueChange={handleStatusChange}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Status peminjaman" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center justify-between w-full">
+                      <span>Semua Status</span>
+                      {stats.menunggu > 0 && (
+                        <Badge variant="default" className="ml-2 bg-yellow-500">
+                          {stats.menunggu}
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="menunggu">
+                    <div className="flex items-center justify-between w-full">
+                      <span>Menunggu</span>
+                      <Badge variant="default" className="ml-2 bg-yellow-500">
+                        {stats.menunggu}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="disetujui">
+                    <div className="flex items-center justify-between w-full">
+                      <span>Disetujui</span>
+                      <Badge variant="default" className="ml-2 bg-green-500">
+                        {stats.disetujui}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="menunggu_pengembalian">
+                    <div className="flex items-center justify-between w-full">
+                      <span>Menunggu Pengembalian</span>
+                      <Badge variant="default" className="ml-2 bg-blue-500">
+                        {stats.menungguPengembalian}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="selesai">Selesai</SelectItem>
+                  <SelectItem value="ditolak">Ditolak</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
 
         <CardContent>
           {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex justify-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <p className="text-muted-foreground">Memuat data peminjaman...</p>
+              </div>
             </div>
           ) : (
             <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {canApprove && <TableHead>Peminjam</TableHead>}
-                    <TableHead>Detail Aset</TableHead>
-                    <TableHead>Tanggal Mulai</TableHead>
-                    <TableHead>Tanggal Selesai</TableHead>
-                    <TableHead>Status</TableHead>
-                    {canApprove && <TableHead>Aksi</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredLoans.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={canApprove ? 6 : 5}
-                        className="text-center text-muted-foreground py-8"
-                      >
-                        {loans.length === 0
-                          ? "Belum ada data peminjaman"
-                          : "Tidak ada peminjaman yang cocok dengan filter"}
-                      </TableCell>
-                    </TableRow>
-                  )}
-
-                  {filteredLoans.map((loan) => (
-                    <TableRow key={loan.id}>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
                       {canApprove && (
-                        <TableCell>
-                          <div className="font-medium">{loan.borrowerName}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {loan.borrowerEmail}
+                        <TableHead className="w-[280px]">
+                          <div className="flex flex-col">
+                            <span>Peminjam</span>
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {showOnlyNew ? 'Hanya menampilkan peminjaman baru' : 'Semua peminjaman'}
+                            </span>
                           </div>
-                        </TableCell>
+                        </TableHead>
                       )}
-                      <TableCell>
-                        <LoanAssetDetails loan={loan} />
-                      </TableCell>
-                      <TableCell>
-                        <LoanDate
-                          value={loan.startDate}
-                          time={loan.startTime}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <LoanDate value={loan.endDate} time={loan.endTime} />
-                      </TableCell>
-                      <TableCell>{renderStatusBadge(loan.status)}</TableCell>
-                      {canApprove && (
-                        <TableCell>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {loan.status === "menunggu" && (
+                      <TableHead>
+                        <div className="flex flex-col">
+                          <span>Detail Aset</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            Ruangan & Fasilitas
+                          </span>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex flex-col">
+                          <span>Tanggal Mulai</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            & Waktu
+                          </span>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex flex-col">
+                          <span>Tanggal Selesai</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            & Waktu
+                          </span>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-2">
+                          <span>Status</span>
+                          <div className="flex flex-col text-[10px] leading-tight">
+                            <span className="text-yellow-600">• Menunggu</span>
+                            <span className="text-green-600">• Disetujui</span>
+                            <span className="text-blue-600">• Menunggu Kembali</span>
+                          </div>
+                        </div>
+                      </TableHead>
+                      {canApprove && <TableHead>Aksi</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLoans.length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={canApprove ? 6 : 5}
+                          className="text-center text-muted-foreground py-12"
+                        >
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            {showOnlyNew ? (
                               <>
+                                <AlertCircle className="h-12 w-12 text-yellow-500" />
+                                <div>
+                                  <p className="font-medium">Tidak ada peminjaman baru</p>
+                                  <p className="text-sm mt-1">
+                                    Semua permintaan peminjaman sudah divalidasi
+                                  </p>
+                                </div>
                                 <Button
-                                  variant="ghost"
-                                  size="sm"
+                                  variant="outline"
                                   onClick={() => {
-                                    const notes = prompt(
-                                      "Masukkan catatan persetujuan (opsional):",
-                                      ""
-                                    );
-                                    if (notes !== null) {
-                                      updateLoanStatus(
-                                        loan.id,
-                                        "disetujui",
-                                        notes
-                                      );
-                                    }
+                                    setShowOnlyNew(false);
+                                    setStatusFilter('all');
                                   }}
-                                  disabled={updatingLoanId === loan.id}
                                 >
-                                  {updatingLoanId === loan.id ? (
-                                    <Loader2 className="mr-1 size-4 animate-spin" />
-                                  ) : (
-                                    <CheckCircle className="mr-1 size-4 text-green-600" />
-                                  )}
-                                  {updatingLoanId === loan.id
-                                    ? "Memproses..."
-                                    : "Setuju"}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    const notes = prompt(
-                                      "Masukkan alasan penolakan:",
-                                      ""
-                                    );
-                                    if (notes !== null) {
-                                      updateLoanStatus(
-                                        loan.id,
-                                        "ditolak",
-                                        notes
-                                      );
-                                    }
-                                  }}
-                                  disabled={updatingLoanId === loan.id}
-                                >
-                                  {updatingLoanId === loan.id ? (
-                                    <Loader2 className="mr-1 size-4 animate-spin" />
-                                  ) : (
-                                    <XCircle className="mr-1 size-4 text-red-600" />
-                                  )}
-                                  {updatingLoanId === loan.id
-                                    ? "Memproses..."
-                                    : "Tolak"}
+                                  Lihat Semua Peminjaman
                                 </Button>
                               </>
+                            ) : (
+                              <>
+                                <AlertCircle className="h-12 w-12 text-gray-400" />
+                                <div>
+                                  <p className="font-medium">Tidak ada data peminjaman</p>
+                                  <p className="text-sm mt-1">
+                                    {loans.length === 0
+                                      ? "Belum ada data peminjaman"
+                                      : "Tidak ada peminjaman yang cocok dengan filter"}
+                                  </p>
+                                </div>
+                              </>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteLoan(loan.id)}
-                              disabled={updatingLoanId === loan.id}
-                            >
-                              <Trash2 className="mr-1 size-4 text-gray-600" />
-                              Hapus
-                            </Button>
                           </div>
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </TableRow>
+                    )}
+
+                    {filteredLoans.map((loan) => {
+                      // Tentukan apakah loan baru (dibuat dalam 24 jam terakhir)
+                      const isNewLoan = (() => {
+                        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                        return loan.status === 'menunggu' && new Date(loan.createdAt) > twentyFourHoursAgo;
+                      })();
+                      
+                      // Tentukan class untuk highlight row baru
+                      const rowClass = isNewLoan ? 'bg-yellow-50 hover:bg-yellow-100' : '';
+
+                      return (
+                        <TableRow key={loan.id} className={rowClass}>
+                          {canApprove && (
+                            <TableCell>
+                              <div className="space-y-2">
+                                <div>
+                                  <p className="font-medium">{loan.borrowerName}</p>
+                                  <p className="text-sm text-muted-foreground">{loan.borrowerEmail}</p>
+                                </div>
+                                
+                                <div className="flex items-center gap-2 text-xs">
+                                  <Calendar className="size-3 text-muted-foreground" />
+                                  <span className="text-muted-foreground">
+                                    Diajukan: {new Date(loan.createdAt).toLocaleDateString('id-ID')}
+                                  </span>
+                                </div>
+                                
+                                {isNewLoan && (
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                                      <Clock className="mr-1 size-3" /> Permintaan Baru
+                                    </Badge>
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                          <TableCell>
+                            <LoanAssetDetails loan={loan} />
+                          </TableCell>
+                          <TableCell>
+                            <LoanDate value={loan.startDate} time={loan.startTime} />
+                          </TableCell>
+                          <TableCell>
+                            <LoanDate value={loan.endDate} time={loan.endTime} />
+                          </TableCell>
+                          <TableCell>
+                            {renderStatusBadge(loan.status, isNewLoan)}
+                          </TableCell>
+                          {canApprove && (
+                            <TableCell>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {loan.status === "menunggu" && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const notes = prompt(
+                                          "Masukkan catatan persetujuan (opsional):",
+                                          ""
+                                        );
+                                        if (notes !== null) {
+                                          updateLoanStatus(
+                                            loan.id,
+                                            "disetujui",
+                                            notes
+                                          );
+                                        }
+                                      }}
+                                      disabled={updatingLoanId === loan.id}
+                                      className="bg-green-50 hover:bg-green-100 text-green-700"
+                                    >
+                                      {updatingLoanId === loan.id ? (
+                                        <Loader2 className="mr-1 size-4 animate-spin" />
+                                      ) : (
+                                        <CheckCircle className="mr-1 size-4" />
+                                      )}
+                                      {updatingLoanId === loan.id
+                                        ? "Memproses..."
+                                        : "Setuju"}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const notes = prompt(
+                                          "Masukkan alasan penolakan:",
+                                          ""
+                                        );
+                                        if (notes !== null) {
+                                          updateLoanStatus(
+                                            loan.id,
+                                            "ditolak",
+                                            notes
+                                          );
+                                        }
+                                      }}
+                                      disabled={updatingLoanId === loan.id}
+                                      className="bg-red-50 hover:bg-red-100 text-red-700"
+                                    >
+                                      {updatingLoanId === loan.id ? (
+                                        <Loader2 className="mr-1 size-4 animate-spin" />
+                                      ) : (
+                                        <XCircle className="mr-1 size-4" />
+                                      )}
+                                      {updatingLoanId === loan.id
+                                        ? "Memproses..."
+                                        : "Tolak"}
+                                    </Button>
+                                  </>
+                                )}
+                                
+                                {loan.status === "menunggu" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (window.confirm("Yakin ingin menghapus peminjaman ini?")) {
+                                        deleteLoan(loan.id);
+                                      }
+                                    }}
+                                    disabled={updatingLoanId === loan.id}
+                                    className="text-gray-600"
+                                  >
+                                    <Trash2 className="mr-1 size-4" />
+                                    Hapus
+                                  </Button>
+                                )}
+                                
+                                {(loan.status === "disetujui" || loan.status === "menunggu_pengembalian") && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const notes = prompt(
+                                        "Masukkan catatan untuk status 'menunggu pengembalian':",
+                                        ""
+                                      );
+                                      if (notes !== null) {
+                                        updateLoanStatus(
+                                          loan.id,
+                                          "menunggu_pengembalian",
+                                          notes
+                                        );
+                                      }
+                                    }}
+                                    disabled={updatingLoanId === loan.id}
+                                    className="bg-blue-50 hover:bg-blue-100 text-blue-700"
+                                  >
+                                    <Clock className="mr-1 size-4" />
+                                    Tandai Menunggu Kembali
+                                  </Button>
+                                )}
+                                
+                                {loan.status === "menunggu_pengembalian" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const notes = prompt(
+                                        "Masukkan catatan penyelesaian:",
+                                        ""
+                                      );
+                                      if (notes !== null) {
+                                        updateLoanStatus(
+                                          loan.id,
+                                          "selesai",
+                                          notes
+                                        );
+                                      }
+                                    }}
+                                    disabled={updatingLoanId === loan.id}
+                                    className="bg-gray-50 hover:bg-gray-100 text-gray-700"
+                                  >
+                                    <CheckCircle className="mr-1 size-4" />
+                                    Selesaikan
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              {/* FOOTER STATISTIK */}
+              {filteredLoans.length > 0 && canApprove && (
+                <div className="border-t bg-muted/30 px-6 py-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <span>Menunggu: {filteredLoans.filter(l => l.status === 'menunggu').length}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span>Disetujui: {filteredLoans.filter(l => l.status === 'disetujui').length}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span>Menunggu Kembali: {filteredLoans.filter(l => l.status === 'menunggu_pengembalian').length}</span>
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground">
+                      Total ditampilkan: {filteredLoans.length}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -477,24 +871,45 @@ export function LoansPage() {
 // Komponen untuk menampilkan detail aset dalam tabel
 function LoanAssetDetails({ loan }) {
   return (
-    <div className="space-y-1">
-      {loan.roomName && <p className="font-medium">Ruangan: {loan.roomName}</p>}
+    <div className="space-y-2">
+      {loan.roomName && (
+        <div className="flex items-start gap-2">
+          <div className="bg-blue-100 p-1.5 rounded-md">
+            <svg className="size-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-medium">Ruangan: {loan.roomName}</p>
+            <p className="text-xs text-muted-foreground">Ruangan utama</p>
+          </div>
+        </div>
+      )}
       {loan.facilities && loan.facilities.length > 0 && (
-        <div className="text-sm text-muted-foreground">
-          <p>Fasilitas:</p>
-          <ul className="list-inside list-disc">
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground font-medium">Fasilitas Pendukung:</p>
+          <ul className="space-y-1">
             {loan.facilities.map((facility, index) => (
-              <li key={index}>
-                {facility.name} ({facility.quantity}x)
+              <li key={index} className="flex items-center gap-2 text-sm">
+                <div className="bg-green-100 p-1 rounded">
+                  <svg className="size-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <span>{facility.name}</span>
+                <Badge variant="outline" className="text-xs ml-auto">
+                  {facility.quantity}x
+                </Badge>
               </li>
             ))}
           </ul>
         </div>
       )}
       {loan.purpose && (
-        <p className="text-sm text-muted-foreground">
-          Keperluan: {loan.purpose}
-        </p>
+        <div className="pt-2 border-t">
+          <p className="text-xs text-muted-foreground">Keperluan:</p>
+          <p className="text-sm line-clamp-2">{loan.purpose}</p>
+        </div>
       )}
     </div>
   );
@@ -505,15 +920,21 @@ function LoanDate({ value, time }) {
   if (!value) return null;
 
   return (
-    <div className="flex items-center gap-2">
-      <Calendar className="size-4 text-muted-foreground" />
-      <div>
-        <div>{new Date(value).toLocaleDateString("id-ID")}</div>
-        {time && <div className="text-sm text-muted-foreground">{time}</div>}
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <Calendar className="size-4 text-muted-foreground" />
+        <span className="font-medium">{new Date(value).toLocaleDateString("id-ID")}</span>
       </div>
+      {time && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Clock className="size-3" />
+          <span>{time}</span>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // Form untuk peminjaman ruangan
 function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
@@ -634,79 +1055,77 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
     setFormData((prev) => ({ ...prev, attachmentUrl: "" }));
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+const handleSubmit = async (event) => {
+  event.preventDefault();
 
-    if (!validateForm()) {
-      toast.error("Harap perbaiki error pada formulir");
-      return;
-    }
+  if (!validateForm()) {
+    toast.error("Harap perbaiki error pada formulir");
+    return;
+  }
 
-    let attachmentUrl = null;
+  let attachmentUrl = null;
 
-    // Upload file jika ada attachment yang perlu diunggah
-    if (attachmentFile && requiresPermissionLetter) {
-      try {
-        setUploadingAttachment(true);
-        toast.info("Mengunggah surat izin...");
-        
-        const uploadResult = await uploadService.uploadImage(attachmentFile);
-        
-        if (uploadResult.status === "success") {
-          attachmentUrl = uploadResult.data.url;
-          toast.success("Surat izin berhasil diunggah");
-        } else {
-          toast.error("Gagal mengunggah surat izin");
-          setUploadingAttachment(false);
-          return;
-        }
-      } catch (error) {
-        console.error("Upload error:", error);
-        toast.error("Gagal mengunggah surat izin: " + error.message);
+  // Upload file jika ada attachment yang perlu diunggah
+  if (attachmentFile && requiresPermissionLetter) {
+    try {
+      setUploadingAttachment(true);
+      toast.info("Mengunggah surat izin...");
+      
+      const uploadResult = await uploadService.uploadImage(attachmentFile);
+      
+      if (uploadResult.status === "success") {
+        attachmentUrl = uploadResult.data.url;
+        toast.success("Surat izin berhasil diunggah");
+      } else {
+        toast.error("Gagal mengunggah surat izin");
         setUploadingAttachment(false);
         return;
-      } finally {
-        setUploadingAttachment(false);
       }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Gagal mengunggah surat izin: " + error.message);
+      setUploadingAttachment(false);
+      return;
+    } finally {
+      setUploadingAttachment(false);
     }
+  }
 
-    const payload = {
-      roomId: formData.roomId,
-      facilities: formData.facilities.map((f) => ({
-        id: f.id,
-        quantity: f.quantity,
-      })),
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      startTime: formData.startTime,
-      endTime: formData.endTime,
-      purpose: formData.purpose,
-      academicYear: formData.academicYear,
-      semester: formData.semester,
-      attachmentUrl: attachmentUrl,
-    };
-
-    const success = await onSubmit(payload);
-    if (success) {
-      setFormData({
-        roomId: "",
-        roomName: "",
-        startDate: new Date().toISOString().split("T")[0],
-        startTime: "08:00",
-        endDate: new Date().toISOString().split("T")[0],
-        endTime: "17:00",
-        purpose: "",
-        facilities: [],
-        academicYear: loanService.getAcademicYear(),
-        semester: loanService.getSemesterFromDate(new Date()),
-        attachmentUrl: "",
-      });
-      setAttachmentFile(null);
-      setAttachmentPreview("");
-      setErrors({});
-    }
+  const payload = {
+    roomId: formData.roomId,
+    facilities: formData.facilities.map((f) => ({
+      id: f.id,
+      quantity: f.quantity,
+    })),
+    startDate: formData.startDate,
+    endDate: formData.endDate,
+    startTime: formData.startTime,
+    endTime: formData.endTime,
+    purpose: formData.purpose,
+    academicYear: formData.academicYear,
+    semester: formData.semester,
+    attachmentUrl: attachmentUrl,
   };
 
+  const success = await onSubmit(payload);
+  if (success) {
+    setFormData({
+      roomId: "",
+      roomName: "",
+      startDate: new Date().toISOString().split("T")[0],
+      startTime: "08:00",
+      endDate: new Date().toISOString().split("T")[0],
+      endTime: "17:00",
+      purpose: "",
+      facilities: [],
+      academicYear: loanService.getAcademicYear(),
+      semester: loanService.getSemesterFromDate(new Date()),
+    });
+    setAttachmentFile(null);
+    setAttachmentPreview("");
+    setErrors({});
+  }
+};
   const handleFieldChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));

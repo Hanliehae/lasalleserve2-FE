@@ -11,26 +11,46 @@ export const loanService = {
       
       console.log(`📝 Fetching loans with params: ${params.toString()}`);
       const response = await api.get(`/loans?${params.toString()}`);
+      
+      // Jika sukses, sort data berdasarkan priority
+      if (response.data.status === 'success' && response.data.data.loans) {
+        const sortedLoans = response.data.data.loans.sort((a, b) => {
+          const priorityOrder = {
+            'menunggu': 1,
+            'disetujui': 2,
+            'menunggu_pengembalian': 3,
+            'selesai': 4,
+            'ditolak': 5
+          };
+          
+          const aPriority = priorityOrder[a.status] || 6;
+          const bPriority = priorityOrder[b.status] || 6;
+          
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          
+          // Jika priority sama, urutkan berdasarkan tanggal (terbaru dulu)
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+        
+        return {
+          ...response.data,
+          data: {
+            ...response.data.data,
+            loans: sortedLoans
+          }
+        };
+      }
+      
       return response.data;
     } catch (error) {
       console.error('❌ Error fetching loans:', error);
-      // Return empty data instead of throwing
       return {
         status: 'error',
         message: error.message || 'Gagal memuat data peminjaman',
         data: { loans: [] }
       };
-    }
-  },
-
-  async getLoanById(id) {
-    try {
-      console.log(`📝 Fetching loan ID: ${id}`);
-      const response = await api.get(`/loans/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Error fetching loan:', error);
-      throw new Error(error.message || 'Gagal memuat detail peminjaman');
     }
   },
 

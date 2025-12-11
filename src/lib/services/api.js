@@ -1,77 +1,113 @@
-// src/lib/api.js
+// src/lib/api.js - PERBAIKI DENGAN BETTER ERROR HANDLING
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// Dynamic API base URL
+const getBaseURL = () => {
+  return 'http://localhost:3001/api';
+};
+
+const API_BASE_URL = getBaseURL();
+
+console.log('🌐 API Base URL:', API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds timeout
+  timeout: 15000, // 15 seconds timeout
+  withCredentials: false,
 });
 
-// Interceptor untuk request
-// Interceptor untuk request - PERBAIKI UNTUK EKSPOR
+// Request interceptor dengan debugging
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Set responseType untuk CSV
-    if (config.url.includes('/export/') && config.params?.format === 'csv') {
-      config.responseType = 'text';
-    }
-    
-    console.log(`🚀 ${config.method.toUpperCase()} ${config.url}`, config.params || '');
+    // Log untuk debugging
+    console.log(`🚀 ${config.method.toUpperCase()} ${config.baseURL}${config.url}`, {
+      params: config.params,
+      data: config.data
+    });
     
     return config;
   },
   (error) => {
-    console.error('❌ Request error:', error);
+    console.error('❌ Request setup error:', error);
     return Promise.reject(error);
   }
 );
 
-// Interceptor untuk response - TAMBAHKAN HANDLING CSV
+// Response interceptor dengan better error handling
 api.interceptors.response.use(
   (response) => {
     console.log(`✅ ${response.status} ${response.config.method.toUpperCase()} ${response.config.url}`);
-    
-    // Handle CSV response
-    if (response.config.responseType === 'text' && typeof response.data === 'string') {
-      return response;
-    }
-    
     return response;
   },
   (error) => {
-    console.error('❌ Response error:', {
+    console.error('❌ API Response Error:', {
       url: error.config?.url,
       method: error.config?.method,
       status: error.response?.status,
-      message: error.response?.data?.message || error.message,
-      data: error.response?.data
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+      code: error.code
     });
 
+    // Network error
+    if (!error.response) {
+      console.error('🌐 Network Error - Backend mungkin tidak berjalan');
+      console.error('   Cek: 1) Backend server running? 2) Port correct? 3) CORS enabled?');
+    }
+
+    // Auth error
     if (error.response?.status === 401) {
-      console.log('🔒 Token expired, redirecting to login');
+      console.log('🔒 Unauthorized - Clearing auth data');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
+      // Redirect to login jika bukan di halaman login
       if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1000);
       }
     }
 
-    return Promise.reject({
+    // Server error
+    if (error.response?.status >= 500) {
+      console.error('💥 Server Error - Backend mungkin crash');
+    }
+
+    // Format error response secara konsisten
+    const formattedError = {
       status: 'error',
-      message: error.response?.data?.message || error.message || 'Terjadi kesalahan',
-      data: error.response?.data,
-      code: error.response?.status
-    });
+      message: error.response?.data?.message || 
+               error.message || 
+               'Terjadi kesalahan koneksi',
+      code: error.response?.status || error.code,
+      data: error.response?.data
+    };
+
+    return Promise.reject(formattedError);
   }
 );
+
+// Test koneksi ke backend
+export const testConnection = async () => {
+  try {
+    const response = await api.get('/health', { timeout: 5000 });
+    console.log('✅ Backend connection test:', response.data);
+    return true;
+  } catch (error) {
+    console.error('❌ Cannot connect to backend:', error.message);
+    return false;
+  }
+};
+
 export default api;

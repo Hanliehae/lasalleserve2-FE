@@ -554,15 +554,26 @@ function ReportForm({ assets, onSubmit, onCancel }) {
           photoUrl: result.data.url,
         }));
         toast.success("Gambar berhasil diunggah");
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error("Gagal mengunggah gambar");
-    } finally {
-      setUploading(false);
+      } else {
+      // Jika upload gagal, gunakan data URL sebagai fallback
+      setFormData((prev) => ({
+        ...prev,
+        photoUrl: reader.result, // data URL
+      }));
+      toast.warning('Upload ke server gagal, menggunakan preview lokal');
     }
-  };
-
+    } catch (error) {
+    console.error('Upload error:', error);
+    // Fallback ke data URL
+    setFormData((prev) => ({
+      ...prev,
+      photoUrl: reader.result,
+    }));
+    toast.warning('Menggunakan preview lokal karena upload gagal');
+  } finally {
+    setUploading(false);
+  }
+};
   const removeImage = () => {
     setPreview("");
     setFormData((prev) => ({ ...prev, photoUrl: "" }));
