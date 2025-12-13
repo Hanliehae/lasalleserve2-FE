@@ -83,6 +83,7 @@ export function ReportsPage() {
 
   const canCreateReport = !MANAGER_ROLES.includes(user?.role ?? "");
   const isKepalaBUF = user?.role === "kepala_buf";
+  const canEditReports = ["admin_buf", "kepala_buf"].includes(user?.role ?? ""); // admin dan kepala bisa edit
 
   useEffect(() => {
     fetchReports();
@@ -277,7 +278,7 @@ export function ReportsPage() {
                 setIsEditDialogOpen(true);
               }}
               userRole={user?.role}
-              isKepalaBUF={isKepalaBUF}
+              canEditReports={canEditReports}
             />
           )}
         </CardContent>
@@ -302,8 +303,8 @@ export function ReportsPage() {
         </Dialog>
       )}
 
-      {/* Dialog Edit Laporan (Hanya Kepala BUF) */}
-      {isKepalaBUF && editingReport && (
+      {/* Dialog Edit Laporan (Admin dan Kepala BUF) */}
+      {canEditReports && editingReport && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -333,7 +334,7 @@ function ReportsTable({
   onDelete,
   onEditReport,
   userRole,
-  isKepalaBUF,
+  canEditReports,
 }) {
   if (reports.length === 0) {
     return (
@@ -357,7 +358,7 @@ function ReportsTable({
               <TableHead>Tanggal</TableHead>
               <TableHead>Detail</TableHead>
               <TableHead>Gambar</TableHead>
-              {isKepalaBUF && <TableHead>Aksi</TableHead>}
+              {canEditReports && <TableHead>Aksi</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -371,7 +372,7 @@ function ReportsTable({
                 </TableCell>
                 <TableCell>{report.reporterName}</TableCell>
                 <TableCell>
-                  {isKepalaBUF ? (
+                  {canEditReports ? (
                     <Select
                       value={report.priority}
                       onValueChange={(value) =>
@@ -394,7 +395,7 @@ function ReportsTable({
                   )}
                 </TableCell>
                 <TableCell>
-                  {isKepalaBUF ? (
+                  {canEditReports ? (
                     <Select
                       value={report.status}
                       onValueChange={(value) =>
@@ -422,7 +423,7 @@ function ReportsTable({
                 <TableCell>
                   <ReportDetailDialog report={report} />
                 </TableCell>
-                {isKepalaBUF && (
+                {canEditReports && (
                   <TableCell>
                     <div className="flex gap-2">
                       <Button

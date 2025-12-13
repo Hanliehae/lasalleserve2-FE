@@ -38,8 +38,9 @@ export function LoginPage({ onNavigateToRegister }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-accent p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle>Login LasalleServe</CardTitle>
+        <CardHeader className="space-y-2 items-center">
+          <CardTitle >Login</CardTitle>
+           <CardTitle>LasalleServe</CardTitle>
           <div className="flex justify-center mb-4">
             <img
               src={logoDelasalle}

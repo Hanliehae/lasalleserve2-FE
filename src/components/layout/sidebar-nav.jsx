@@ -16,7 +16,7 @@ import { Button } from "../ui/button";
 // sidebar-nav.jsx - Pastikan konfigurasi sudah benar
 const navItems = [
   {
-    title: "Dashboard",
+    title: "Beranda",
     href: "/",
     icon: LayoutDashboard,
     roles: [

@@ -42,7 +42,7 @@ const getAcademicYearOptions = () => {
 
 export function ExportPage() {
   const { user } = useAuth();
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState("");
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState("all");
   const [selectedSemester, setSelectedSemester] = useState("all");
   const [reportType, setReportType] = useState("peminjaman");
   const [loading, setLoading] = useState(false);
@@ -110,14 +110,14 @@ export function ExportPage() {
 
       if (reportType === "peminjaman") {
         await exportService.exportLoans(
-          selectedAcademicYear || "",
+          selectedAcademicYear === "all" ? "" : selectedAcademicYear,
           selectedSemester,
           "csv"
         );
         toast.success("Data peminjaman berhasil diekspor");
       } else if (reportType === "kerusakan") {
         await exportService.exportDamageReports(
-          selectedAcademicYear || "",
+          selectedAcademicYear === "all" ? "" : selectedAcademicYear,
           selectedSemester,
           "csv"
         );
@@ -212,7 +212,7 @@ export function ExportPage() {
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold">
-              {selectedAcademicYear || "Semua"}
+              {selectedAcademicYear === "all" ? "Semua" : selectedAcademicYear}
             </div>
             <p className="text-sm text-muted-foreground">Filter aktif</p>
           </CardContent>
@@ -238,7 +238,7 @@ export function ExportPage() {
                   <SelectValue placeholder="Pilih Tahun Ajaran" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Semua Tahun Ajaran</SelectItem>
+                  <SelectItem value="all">Semua Tahun Ajaran</SelectItem>
                   {academicYearOptions.map((year) => (
                     <SelectItem key={year} value={year}>
                       {year}
@@ -291,7 +291,7 @@ export function ExportPage() {
             <div className="bg-muted p-4 rounded-lg">
               <h4 className="font-medium mb-2">Detail Ekspor:</h4>
               <p className="text-sm">
-                • Tahun Ajaran: {selectedAcademicYear || "Semua"}
+                • Tahun Ajaran: {selectedAcademicYear === "all" ? "Semua" : selectedAcademicYear}
                 <br />• Semester:{" "}
                 {selectedSemester === "all"
                   ? "Semua"

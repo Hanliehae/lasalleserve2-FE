@@ -231,8 +231,10 @@ export function LoansPage() {
     }
   };
 
-  const renderStatusBadge = (status, isNew = false) => {
+  const renderStatusBadge = (loan, isNew = false) => {
+    const status = loan.status || loan;
     const config = STATUS_BADGES[status] ?? STATUS_BADGES.menunggu;
+    const hasNotes = loan.approvalNotes && ['disetujui', 'ditolak'].includes(status);
     
     return (
       <div className="flex flex-col gap-1">
@@ -250,6 +252,24 @@ export function LoansPage() {
           <div className="text-xs text-muted-foreground flex items-center gap-1">
             <Clock className="size-3" />
             <span>Dalam 24 jam</span>
+          </div>
+        )}
+        {/* Tampilkan notes untuk disetujui/ditolak */}
+        {hasNotes && (
+          <div className={`text-xs mt-1 p-2 rounded border max-w-[200px] ${
+            status === 'disetujui' ? 'bg-green-50 border-green-200 text-green-800' : 
+            status === 'ditolak' ? 'bg-red-50 border-red-200 text-red-800' : 
+            'bg-gray-50 border-gray-200'
+          }`}>
+            <div className="font-medium mb-1">
+              {status === 'ditolak' ? 'Alasan Penolakan:' : 'Catatan:'}
+            </div>
+            <div className="break-words">{loan.approvalNotes}</div>
+            {loan.approverName && (
+              <div className="text-[10px] mt-1 opacity-70">
+                oleh {loan.approverName}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -694,7 +714,7 @@ export function LoansPage() {
                             <LoanDate value={loan.endDate} time={loan.endTime} />
                           </TableCell>
                           <TableCell>
-                            {renderStatusBadge(loan.status, isNewLoan)}
+                            {renderStatusBadge(loan, isNewLoan)}
                           </TableCell>
                           {canApprove && (
                             <TableCell>
