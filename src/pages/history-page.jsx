@@ -233,17 +233,17 @@ export function HistoryPage() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="rounded-md border">
-              <Table>
+            <div className="rounded-md border overflow-x-auto">
+              <Table className="min-w-[900px]">
                 <TableHeader>
-                  <TableRow>
-                    {canViewAll && <TableHead>Peminjam</TableHead>}
-                    <TableHead>Aset</TableHead>
-                    <TableHead>Tanggal Peminjaman</TableHead>
-                    <TableHead>Tanggal Pengembalian</TableHead>
-                    <TableHead>Tahun Ajaran</TableHead>
-                    <TableHead>Semester</TableHead>
-                    <TableHead>Status</TableHead>
+                  <TableRow className="bg-muted/50">
+                    {canViewAll && <TableHead className="w-[150px]">Peminjam</TableHead>}
+                    <TableHead className="w-[200px]">Aset</TableHead>
+                    <TableHead className="w-[140px] text-center">Tanggal Pinjam</TableHead>
+                    <TableHead className="w-[140px] text-center">Tanggal Kembali</TableHead>
+                    <TableHead className="w-[100px] text-center">Tahun Ajaran</TableHead>
+                    <TableHead className="w-[80px] text-center">Semester</TableHead>
+                    <TableHead className="w-[100px] text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

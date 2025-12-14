@@ -301,18 +301,18 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
   return (
     <div className="overflow-x-auto">
       <div className="rounded-md border">
-        <Table>
+        <Table className="min-w-[900px]">
           <TableHeader>
-            <TableRow>
-              <TableHead>Nama Aset</TableHead>
-              <TableHead>Kategori</TableHead>
-              <TableHead>Lokasi</TableHead>
-              <TableHead>Tahun Ajaran</TableHead>
-              <TableHead>Semester</TableHead>
-              <TableHead>Total Stok</TableHead>
-              <TableHead>Tersedia (Baik)</TableHead>
-              <TableHead>Kondisi</TableHead>
-              {canManage && <TableHead>Aksi</TableHead>}
+            <TableRow className="bg-muted/50">
+              <TableHead className="w-[200px]">Nama Aset</TableHead>
+              <TableHead className="w-[100px]">Kategori</TableHead>
+              <TableHead className="w-[150px]">Lokasi</TableHead>
+              <TableHead className="w-[100px] text-center">Tahun Ajaran</TableHead>
+              <TableHead className="w-[80px] text-center">Semester</TableHead>
+              <TableHead className="w-[80px] text-center">Total</TableHead>
+              <TableHead className="w-[80px] text-center">Tersedia</TableHead>
+              <TableHead className="w-[180px]">Kondisi</TableHead>
+              {canManage && <TableHead className="w-[100px] text-center">Aksi</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -328,14 +328,14 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
                   ?.quantity || 0;
 
               return (
-                <TableRow key={asset.id}>
+                <TableRow key={asset.id} className="hover:bg-muted/30">
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Package className="size-4 text-muted-foreground" />
+                      <Package className="size-4 text-muted-foreground shrink-0" />
                       <div>
                         <p className="font-medium">{asset.name}</p>
                         {asset.description && (
-                          <p className="text-sm text-muted-foreground truncate max-w-xs">
+                          <p className="text-sm text-muted-foreground truncate max-w-[180px]">
                             {asset.description}
                           </p>
                         )}
@@ -343,39 +343,39 @@ function AssetsTable({ assets, canManage, onEdit, onDelete }) {
                     </div>
                   </TableCell>
                   <TableCell className="capitalize">{asset.category}</TableCell>
-                  <TableCell>{asset.location}</TableCell>
-                  <TableCell>{asset.acquisitionYear || "-"}</TableCell>
-                  <TableCell>{asset.semester || "-"}</TableCell>
-                  <TableCell className="font-bold">
+                  <TableCell className="text-sm">{asset.location}</TableCell>
+                  <TableCell className="text-center text-sm">{asset.acquisitionYear || "-"}</TableCell>
+                  <TableCell className="text-center text-sm">{asset.semester || "-"}</TableCell>
+                  <TableCell className="text-center font-bold">
                     {asset.totalStock}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <span
                       className={
                         asset.availableStock === 0
                           ? "text-red-600 font-bold"
-                          : "font-bold"
+                          : "font-bold text-green-600"
                       }
                     >
                       {asset.availableStock}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="default" className="text-xs">
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="default" className="text-xs w-fit">
                         Baik: {baik}
                       </Badge>
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="text-xs w-fit">
                         Ringan: {rusakRingan}
                       </Badge>
-                      <Badge variant="destructive" className="text-xs">
+                      <Badge variant="destructive" className="text-xs w-fit">
                         Berat: {rusakBerat}
                       </Badge>
                     </div>
                   </TableCell>
                   {canManage && (
-                    <TableCell>
-                      <div className="flex items-center gap-2">
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -520,25 +520,15 @@ function AssetForm({ initialData, onSubmit, onCancel }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="acquisitionYear">Tahun Ajaran</Label>
-          <Select
+          <Input
+            id="acquisitionYear"
             value={formData.acquisitionYear}
-            onValueChange={(value) => handleChange("acquisitionYear", value)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={`${currentYear - 1}/${currentYear}`}>
-                {currentYear - 1}/{currentYear}
-              </SelectItem>
-              <SelectItem value={`${currentYear}/${currentYear + 1}`}>
-                {currentYear}/{currentYear + 1}
-              </SelectItem>
-              <SelectItem value={`${currentYear + 1}/${currentYear + 2}`}>
-                {currentYear + 1}/{currentYear + 2}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={(e) => handleChange("acquisitionYear", e.target.value)}
+            placeholder="Contoh: 2024/2025"
+          />
+          <p className="text-xs text-muted-foreground">
+            Format: YYYY/YYYY (contoh: 2024/2025)
+          </p>
         </div>
 
         <div className="space-y-2">

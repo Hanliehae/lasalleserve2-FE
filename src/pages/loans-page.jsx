@@ -572,7 +572,7 @@ export function LoansPage() {
           ) : (
             <div className="rounded-md border">
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="min-w-[1000px]">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       {canApprove && (

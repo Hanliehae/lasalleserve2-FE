@@ -348,17 +348,17 @@ function ReportsTable({
   return (
     <div className="overflow-x-auto">
       <div className="rounded-md border">
-        <Table>
+        <Table className="min-w-[900px]">
           <TableHeader>
-            <TableRow>
-              <TableHead>Aset</TableHead>
-              <TableHead>Pelapor</TableHead>
-              <TableHead>Prioritas</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Tanggal</TableHead>
-              <TableHead>Detail</TableHead>
-              <TableHead>Gambar</TableHead>
-              {canEditReports && <TableHead>Aksi</TableHead>}
+            <TableRow className="bg-muted/50">
+              <TableHead className="w-[180px]">Aset</TableHead>
+              <TableHead className="w-[140px]">Pelapor</TableHead>
+              <TableHead className="w-[120px] text-center">Prioritas</TableHead>
+              <TableHead className="w-[160px] text-center">Status</TableHead>
+              <TableHead className="w-[100px] text-center">Tanggal</TableHead>
+              <TableHead className="w-[80px] text-center">Detail</TableHead>
+              <TableHead className="w-[80px] text-center">Gambar</TableHead>
+              {canEditReports && <TableHead className="w-[100px] text-center">Aksi</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
