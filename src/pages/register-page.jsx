@@ -145,7 +145,7 @@ export function RegisterPage({ onNavigateToLogin }) {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Kata Sandi</Label>
                 <Input
                   id="password"
                   type="password"
@@ -159,7 +159,7 @@ export function RegisterPage({ onNavigateToLogin }) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Konfirmasi Password</Label>
+                <Label htmlFor="confirmPassword">Konfirmasi Kata Sandi</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -178,7 +178,7 @@ export function RegisterPage({ onNavigateToLogin }) {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
+                <Label htmlFor="role">Peran</Label>
                 <Select
                   value={formData.role}
                   onValueChange={(value) =>
@@ -242,7 +242,7 @@ export function RegisterPage({ onNavigateToLogin }) {
 
             {formData.role === "mahasiswa" && (
               <div className="space-y-2">
-                <Label htmlFor="ktm">Upload KTM (Kartu Tanda Mahasiswa)</Label>
+                <Label htmlFor="ktm">Unggah KTM (Kartu Tanda Mahasiswa)</Label>
                 <div className="flex items-center gap-2">
                   <Input
                     id="ktm"
@@ -269,7 +269,7 @@ export function RegisterPage({ onNavigateToLogin }) {
                 type="button"
                 onClick={onNavigateToLogin}
               >
-                Kembali ke Login
+                Kembali ke Masuk
               </Button>
               <Button type="submit" disabled={loading}>
                 {loading ? "Memproses..." : "Daftar"}

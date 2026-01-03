@@ -269,7 +269,7 @@ export function AssetsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingAsset ? "Edit Aset" : "Tambah Aset Baru"}
+              {editingAsset ? "Edit Aset" : "Tambah Aset"}
             </DialogTitle>
             <DialogDescription>
               {editingAsset
@@ -512,7 +512,7 @@ function AssetForm({ initialData, onSubmit, onCancel }) {
           id="location"
           value={formData.location}
           onChange={(e) => handleChange("location", e.target.value)}
-          placeholder="Gedung Agustinus, Lantai 3"
+          placeholder="Gedung Agustinus"
           required
         />
       </div>

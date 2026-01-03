@@ -39,7 +39,7 @@ export function LoginPage({ onNavigateToRegister }) {
     <div className="flex min-h-screen items-center justify-center bg-accent p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2 items-center">
-          <CardTitle >Login</CardTitle>
+          <CardTitle >Masuk</CardTitle>
            <CardTitle>LasalleServe</CardTitle>
           <div className="flex justify-center mb-4">
             <img
@@ -71,7 +71,7 @@ export function LoginPage({ onNavigateToRegister }) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Kata Sandi</Label>
               <Input
                 id="password"
                 type="password"
@@ -83,7 +83,7 @@ export function LoginPage({ onNavigateToRegister }) {
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Memproses..." : "Login"}
+              {loading ? "Memproses..." : "Masuk"}
             </Button>
 
             <div className="text-center">
@@ -100,12 +100,12 @@ export function LoginPage({ onNavigateToRegister }) {
             </div>
           </form>
 
-          <div className="mt-6 space-y-2 rounded-lg bg-muted p-4">
+          {/* <div className="mt-6 space-y-2 rounded-lg bg-muted p-4">
             <p className="text-muted-foreground">Demo Akun:</p>
             <p>Admin: admin@buf.ac.id / admin123</p>
             <p>Staf: staf@buf.ac.id / staf123</p>
             <p>Mahasiswa: mahasiswa@student.ac.id / mhs123</p>
-          </div>
+          </div> */}
         </CardContent>
       </Card>
     </div>

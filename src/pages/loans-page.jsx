@@ -349,7 +349,10 @@ export function LoansPage() {
 
         {canCreateLoan && (
           <div className="flex flex-wrap gap-2">
-            <Dialog open={isRoomFormOpen} onOpenChange={setIsRoomFormOpen}>
+            <Dialog open={isRoomFormOpen} onOpenChange={(open) => {
+              if (open) fetchAssets(); // Refresh stock data saat dialog dibuka
+              setIsRoomFormOpen(open);
+            }}>
               <DialogTrigger asChild>
                 <Button className="bg-yellow-500hover:bg-yellow-700">
                   <Plus className="mr-2 size-4" />
@@ -380,7 +383,10 @@ export function LoansPage() {
 
             <Dialog
               open={isFacilityFormOpen}
-              onOpenChange={setIsFacilityFormOpen}
+              onOpenChange={(open) => {
+                if (open) fetchAssets(); // Refresh stock data saat dialog dibuka
+                setIsFacilityFormOpen(open);
+              }}
             >
               <DialogTrigger asChild>
                 <Button variant="outline">
@@ -413,7 +419,7 @@ export function LoansPage() {
       </header>
 
       {/* STATISTIK CEPAT */}
-      {canApprove && (
+      {/* {canApprove && (
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <Card className="border-l-4 border-l-yellow-500">
             <CardContent className="pt-6">
@@ -472,7 +478,7 @@ export function LoansPage() {
             </CardContent>
           </Card>
         </div>
-      )}
+      )} */}
 
       <Card>
         <CardHeader>
@@ -612,11 +618,11 @@ export function LoansPage() {
                       <TableHead>
                         <div className="flex items-center gap-2">
                           <span>Status</span>
-                          <div className="flex flex-col text-[10px] leading-tight">
+                          {/* <div className="flex flex-col text-[10px] leading-tight">
                             <span className="text-yellow-600">• Menunggu</span>
                             <span className="text-green-600">• Disetujui</span>
                             <span className="text-blue-600">• Menunggu Kembali</span>
-                          </div>
+                          </div> */}
                         </div>
                       </TableHead>
                       {canApprove && <TableHead>Aksi</TableHead>}
@@ -986,9 +992,16 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
     return hours >= 17;
   };
 
+  // Fungsi untuk cek apakah hari Sabtu/Minggu
+  const isWeekend = (dateStr) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+    return day === 0 || day === 6;
+  };
 
-
-  const requiresPermissionLetter = isAfter5PM(formData.endTime);
+  // Wajib surat izin jika >= 17:00 ATAU hari Sabtu/Minggu
+  const requiresPermissionLetter = isAfter5PM(formData.endTime) || isWeekend(formData.startDate);
 
   // Filter hanya ruangan
   const availableRooms = useMemo(() => {
@@ -1022,10 +1035,10 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
 
     if (!formData.purpose.trim()) newErrors.purpose = "Keperluan harus diisi";
 
-    // Validasi surat izin untuk peminjaman di atas jam 17:00
+    // Validasi surat izin untuk peminjaman di atas jam 17:00 atau hari Sabtu/Minggu
     if (requiresPermissionLetter && !formData.attachmentUrl) {
       newErrors.attachment =
-        "Surat izin wajib dilampirkan untuk peminjaman di atas jam 17:00";
+        "Surat izin wajib dilampirkan untuk peminjaman di atas jam 17:00 atau hari Sabtu/Minggu";
     }
 
     setErrors(newErrors);
@@ -1313,7 +1326,7 @@ if (endDateTime <= startDateTime) {
           {requiresPermissionLetter && (
             <div className="flex items-center gap-2 mt-1 text-amber-600 text-sm">
               <AlertCircle className="size-4" />
-              <span>Wajib melampirkan surat izin</span>
+              <span>Wajib surat izin (weekend atau jam ≥17:00)</span>
             </div>
           )}
         </div>

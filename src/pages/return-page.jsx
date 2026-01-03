@@ -432,10 +432,9 @@ export function ReturnPage() {
                     <TableHead>Detail Aset</TableHead>
                     <TableHead>Tanggal Mulai</TableHead>
                     <TableHead>Tanggal Selesai</TableHead>
-                    <TableHead>Waktu Mulai</TableHead>
-                    <TableHead>Waktu Selesai</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Status</TableHead>               
                     {canApprove && <TableHead>Aksi</TableHead>}
+                    <TableHead>Detail</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -763,20 +762,6 @@ export function ReturnPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Catatan Pengembalian</Label>
-                <Textarea
-                  placeholder="Tambahkan catatan jika diperlukan..."
-                  value={returnData.notes}
-                  onChange={(e) =>
-                    setReturnData((prev) => ({
-                      ...prev,
-                      notes: e.target.value,
-                    }))
-                  }
-                />
               </div>
 
               <div className="flex justify-end gap-3">

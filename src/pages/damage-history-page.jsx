@@ -315,7 +315,7 @@ export function DamageHistoryPage() {
             </Card>
           </div>
 
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle>Trend Laporan Kerusakan</CardTitle>
               <CardDescription>
@@ -338,7 +338,7 @@ export function DamageHistoryPage() {
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
-          </Card>
+          </Card> */}
 
           <Card>
             <CardHeader>
