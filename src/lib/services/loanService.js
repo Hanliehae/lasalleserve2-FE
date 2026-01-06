@@ -81,7 +81,8 @@ export const loanService = {
         endTime: loanData.endTime || '17:00',
         purpose: loanData.purpose || '',
         academicYear: loanData.academicYear || this.getAcademicYear(startDate),
-        semester: loanData.semester || this.getSemesterFromDate(startDate)
+        semester: loanData.semester || this.getSemesterFromDate(startDate),
+        attachmentUrl: loanData.attachmentUrl || null
       };
 
       console.log('📝 Loan payload:', payload);

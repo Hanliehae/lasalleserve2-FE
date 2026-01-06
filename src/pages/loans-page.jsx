@@ -108,6 +108,13 @@ export function LoansPage() {
       const result = await loanService.getLoans(searchTerm, statusFilter);
 
       if (result.status === "success") {
+        // Debug: Log loans dengan attachmentUrl
+        const loansWithAttachments = result.data.loans.filter(l => l.attachmentUrl);
+        console.log(`📎 Loans with attachments: ${loansWithAttachments.length}/${result.data.loans.length}`);
+        if (loansWithAttachments.length > 0) {
+          console.log('📎 Attachment URLs:', loansWithAttachments.map(l => ({ id: l.id, attachmentUrl: l.attachmentUrl })));
+        }
+        
         // Sort loans berdasarkan priority order (sudah dari backend, tapi kita sort lagi untuk memastikan)
         const sortedLoans = [...result.data.loans].sort((a, b) => {
           const priorityOrder = {
@@ -643,6 +650,12 @@ export function LoansPage() {
                           </div> */}
                         </div>
                       </TableHead>
+                      {/* Header Lampiran - hanya untuk admin/staf */}
+                      {canApprove && (
+                        <TableHead className="w-[120px]">
+                          Lampiran
+                        </TableHead>
+                      )}
                       {canApprove && <TableHead>Aksi</TableHead>}
                     </TableRow>
                   </TableHeader>
@@ -740,6 +753,24 @@ export function LoansPage() {
                           <TableCell>
                             {renderStatusBadge(loan, isNewLoan)}
                           </TableCell>
+                          {/* Kolom Lampiran - hanya untuk admin/staf */}
+                          {canApprove && (
+                            <TableCell>
+                              {loan.attachmentUrl ? (
+                                <a
+                                  href={loan.attachmentUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                                >
+                                  <FileText className="size-4" />
+                                  <span className="text-sm">Lihat Surat</span>
+                                </a>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                          )}
                           {canApprove && (
                             <TableCell>
                               <div className="flex flex-wrap items-center gap-2">
@@ -1110,7 +1141,8 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
     if (!formData.purpose.trim()) newErrors.purpose = "Keperluan harus diisi";
 
     // Validasi surat izin untuk peminjaman di atas jam 17:00 atau hari Sabtu/Minggu
-    if (requiresPermissionLetter && !formData.attachmentUrl) {
+    // Cek attachmentFile (file yang dipilih user) BUKAN attachmentUrl (yang baru ada setelah upload)
+    if (requiresPermissionLetter && !attachmentFile) {
       newErrors.attachment =
         "Surat izin wajib dilampirkan untuk peminjaman di atas jam 17:00 atau hari Sabtu/Minggu";
     }
@@ -1182,12 +1214,21 @@ const handleSubmit = async (event) => {
       toast.info("Mengunggah surat izin...");
       
       const uploadResult = await uploadService.uploadImage(attachmentFile);
+      console.log('📥 Upload result:', uploadResult);
       
-      if (uploadResult.status === "success") {
+      // Handle different response formats
+      if (uploadResult.status === "success" && uploadResult.data?.url) {
         attachmentUrl = uploadResult.data.url;
+        console.log('✅ Got attachment URL:', attachmentUrl);
+        toast.success("Surat izin berhasil diunggah");
+      } else if (uploadResult.data?.status === "success" && uploadResult.data?.data?.url) {
+        // Handle nested response format
+        attachmentUrl = uploadResult.data.data.url;
+        console.log('✅ Got attachment URL (nested):', attachmentUrl);
         toast.success("Surat izin berhasil diunggah");
       } else {
-        toast.error("Gagal mengunggah surat izin");
+        console.error('❌ Unexpected upload response format:', uploadResult);
+        toast.error("Gagal mengunggah surat izin: format response tidak valid");
         setUploadingAttachment(false);
         return;
       }
@@ -1216,6 +1257,10 @@ const handleSubmit = async (event) => {
     semester: formData.semester,
     attachmentUrl: attachmentUrl,
   };
+
+  // Debug: Log payload sebelum submit
+  console.log('📤 Loan payload:', payload);
+  console.log('📎 Attachment URL in payload:', attachmentUrl);
 
 // Validasi waktu selesai > waktu mulai
 const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
