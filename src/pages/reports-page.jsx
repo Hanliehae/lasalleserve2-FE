@@ -304,7 +304,7 @@ export function ReportsPage() {
       )}
 
       {/* Dialog Edit Laporan (Admin dan Kepala BUF) */}
-      {canEditReports && editingReport && (
+      {/* {canEditReports && editingReport && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -323,7 +323,7 @@ export function ReportsPage() {
             />
           </DialogContent>
         </Dialog>
-      )}
+      )} */}
     </div>
   );
 }
@@ -357,7 +357,6 @@ function ReportsTable({
               <TableHead className="w-[160px] text-center">Status</TableHead>
               <TableHead className="w-[100px] text-center">Tanggal</TableHead>
               <TableHead className="w-[80px] text-center">Detail</TableHead>
-              <TableHead className="w-[80px] text-center">Gambar</TableHead>
               {canEditReports && <TableHead className="w-[100px] text-center">Aksi</TableHead>}
             </TableRow>
           </TableHeader>
@@ -426,13 +425,13 @@ function ReportsTable({
                 {canEditReports && (
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button
+                      {/* <Button
                         variant="outline"
                         size="sm"
                         onClick={() => onEditReport(report)}
                       >
                         <Edit className="size-4" />
-                      </Button>
+                      </Button> */}
                       <Button
                         variant="outline"
                         size="sm"

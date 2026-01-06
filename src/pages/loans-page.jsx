@@ -14,7 +14,9 @@ import {
   AlertTriangle,
   Filter,
   BarChart3,
-  Eye
+  Eye,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -89,6 +91,8 @@ export function LoansPage() {
   const [updatingLoanId, setUpdatingLoanId] = useState(null);
   const [showOnlyNew, setShowOnlyNew] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const canApprove = APPROVER_ROLES.includes(user?.role ?? "");
   const canCreateLoan = CREATOR_ROLES.includes(user?.role ?? "");
@@ -334,6 +338,20 @@ export function LoansPage() {
       return l.status === 'menunggu' && new Date(l.createdAt) > twentyFourHoursAgo;
     }).length
   }), [loans]);
+
+  // Pagination: hitung total halaman dan slice data
+  const totalPages = Math.ceil(filteredLoans.length / ITEMS_PER_PAGE);
+  
+  const paginatedLoans = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredLoans.slice(startIndex, endIndex);
+  }, [filteredLoans, currentPage, ITEMS_PER_PAGE]);
+
+  // Reset ke halaman 1 saat filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, showOnlyNew]);
 
   return (
     <div className="space-y-6">
@@ -673,7 +691,7 @@ export function LoansPage() {
                       </TableRow>
                     )}
 
-                    {filteredLoans.map((loan) => {
+                    {paginatedLoans.map((loan) => {
                       // Tentukan apakah loan baru (dibuat dalam 24 jam terakhir)
                       const isNewLoan = (() => {
                         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -880,8 +898,64 @@ export function LoansPage() {
                         <span>Menunggu Kembali: {filteredLoans.filter(l => l.status === 'menunggu_pengembalian').length}</span>
                       </div>
                     </div>
-                    <div className="text-muted-foreground">
+                    {/* <div className="text-muted-foreground">
                       Total ditampilkan: {filteredLoans.length}
+                    </div> */}
+                  </div>
+                </div>
+              )}
+
+              {/* PAGINATION CONTROLS */}
+              {filteredLoans.length > ITEMS_PER_PAGE && (
+                <div className="border-t px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Menampilkan {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredLoans.length)} dari {filteredLoans.length} data
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="size-4 mr-1" />
+                        Sebelumnya
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className="w-8 h-8 p-0"
+                              onClick={() => setCurrentPage(pageNum)}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Berikutnya
+                        <ChevronRight className="size-4 ml-1" />
+                      </Button>
                     </div>
                   </div>
                 </div>
