@@ -449,6 +449,10 @@ function ReportsTable({
       src={report.photoUrl} 
       alt={`Kerusakan ${report.assetName}`}
       className="h-12 w-12 object-cover rounded"
+      onError={(e) => {
+        console.error('Image load error for:', report.photoUrl);
+        e.target.style.display = 'none';
+      }}
     />
   )}
 </TableCell>
@@ -543,44 +547,73 @@ function ReportForm({ assets, onSubmit, onCancel }) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState("");
 
-  const handleFileChange = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+// Di fungsi handleFileChange - PERBAIKI
+// Di fungsi handleFileChange - PERBAIKI
+const handleFileChange = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
 
-    // Preview gambar
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+  // Validasi file
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+  const maxSize = 10 * 1024 * 1024; // 10MB
 
-    // Upload ke server
-    try {
-      setUploading(true);
-      const result = await uploadService.uploadImage(file);
+  if (!allowedTypes.includes(file.type)) {
+    toast.error('Format file tidak didukung. Gunakan JPG, PNG, WebP, atau GIF');
+    return;
+  }
 
-      if (result.status === "success") {
-        setFormData((prev) => ({
-          ...prev,
-          photoUrl: result.data.url,
-        }));
-        toast.success("Gambar berhasil diunggah");
-      } else {
-      // Jika upload gagal, gunakan data URL sebagai fallback
+  if (file.size > maxSize) {
+    toast.error('Ukuran file terlalu besar. Maksimal 10MB');
+    return;
+  }
+
+  // Preview gambar
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    setPreview(reader.result);
+  };
+  reader.readAsDataURL(file);
+
+  // Upload ke server
+  try {
+    setUploading(true);
+    console.log('📤 Starting upload for file:', {
+      name: file.name,
+      type: file.type,
+      size: file.size
+    });
+
+    const result = await uploadService.uploadImage(file);
+    console.log('📥 Upload response:', result);
+
+    // PERBAIKAN: Handle response yang konsisten
+    if (result.data?.status === 'success' && result.data.data?.url) {
+      const url = result.data.data.url;
+      console.log('✅ Got secure URL:', url);
+      
       setFormData((prev) => ({
         ...prev,
-        photoUrl: reader.result, // data URL
+        photoUrl: url,
       }));
-      toast.warning('Upload ke server gagal, menggunakan preview lokal');
+      toast.success("Gambar berhasil diunggah");
+    } else if (result.data?.url) {
+      // Fallback untuk response format lama
+      console.log('✅ Got URL (fallback):', result.data.url);
+      setFormData((prev) => ({
+        ...prev,
+        photoUrl: result.data.url,
+      }));
+      toast.success("Gambar berhasil diunggah");
+    } else {
+      console.error('❌ Upload response missing URL:', result);
+      toast.error('Gagal mengunggah gambar: URL tidak ditemukan dalam response');
+      setPreview("");
     }
-    } catch (error) {
-    console.error('Upload error:', error);
-    // Fallback ke data URL
-    setFormData((prev) => ({
-      ...prev,
-      photoUrl: reader.result,
-    }));
-    toast.warning('Menggunakan preview lokal karena upload gagal');
+  } catch (error) {
+    console.error('❌ Upload error:', error);
+    console.error('Error details:', error.response?.data || error.message);
+    toast.error('Gagal mengunggah gambar: ' + (error.message || 'Koneksi error'));
+    setPreview("");
   } finally {
     setUploading(false);
   }
