@@ -192,13 +192,12 @@ export function RegisterPage({ onNavigateToLogin }) {
                     <SelectItem value="mahasiswa">Mahasiswa</SelectItem>
                     <SelectItem value="dosen">Dosen</SelectItem>
                     <SelectItem value="staf">Staf Universitas</SelectItem>
-                    <SelectItem value="civitas">Civitas Akademik</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="department">Jurusan/Fakultas</Label>
+                <Label htmlFor="department">Departemen/Biro/Prodi</Label>
                 <Input
                   id="department"
                   type="text"

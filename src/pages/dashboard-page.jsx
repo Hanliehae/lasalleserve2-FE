@@ -308,7 +308,7 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>Aktivitas Terbaru</CardTitle>
             <CardDescription>Update terkini sistem</CardDescription>
@@ -329,7 +329,7 @@ export function DashboardPage() {
               </article>
             ))}
           </CardContent>
-        </Card>
+        </Card> */}
       </section>
     </div>
   );

@@ -126,14 +126,14 @@ export function SidebarNav({ currentPath, onNavigate }) {
       </nav>
 
       <div className="border-t p-4 space-y-2">
-        <Button
+        {/* <Button
           variant="ghost"
           className="w-full justify-start gap-3"
           onClick={() => onNavigate("/settings")}
         >
           <Settings className="size-5 shrink-0" />
           <span className="truncate">Pengaturan</span>
-        </Button>
+        </Button> */}
         <Button
           variant="ghost"
           className="w-full justify-start gap-3"

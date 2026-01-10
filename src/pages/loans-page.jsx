@@ -1108,6 +1108,16 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
   // Wajib surat izin jika >= 17:00 ATAU hari Sabtu/Minggu
   const requiresPermissionLetter = isAfter5PM(formData.endTime) || isWeekend(formData.startDate);
 
+  // Fungsi untuk cek apakah datetime sudah lewat
+  const isPastDateTime = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return false;
+    
+    const now = new Date();
+    const selectedDateTime = new Date(`${dateStr}T${timeStr}`);
+    
+    return selectedDateTime < now;
+  };
+
   // Filter hanya ruangan
   const availableRooms = useMemo(() => {
     return assets.filter((asset) => asset.category === "ruangan");
@@ -1139,6 +1149,14 @@ function RoomLoanForm({ assets, onSubmit, onCancel, submitting }) {
     }
 
     if (!formData.purpose.trim()) newErrors.purpose = "Keperluan harus diisi";
+
+    // Validasi: tidak bisa pinjam di waktu yang sudah lewat
+    if (formData.startDate && formData.startTime) {
+      if (isPastDateTime(formData.startDate, formData.startTime)) {
+        newErrors.datetime = 
+          "Tidak dapat melakukan peminjaman di waktu yang sudah lewat. Pilih tanggal dan waktu di masa depan.";
+      }
+    }
 
     // Validasi surat izin untuk peminjaman di atas jam 17:00 atau hari Sabtu/Minggu
     // Cek attachmentFile (file yang dipilih user) BUKAN attachmentUrl (yang baru ada setelah upload)
@@ -1445,13 +1463,23 @@ if (endDateTime <= startDateTime) {
           {requiresPermissionLetter && (
             <div className="flex items-center gap-2 mt-1 text-amber-600 text-sm">
               <AlertCircle className="size-4" />
-              <span>Wajib surat izin (weekend atau jam ≥17:00)</span>
+              <span>Wajib surat izin (akhir pekan atau jam ≥17:00)</span>
             </div>
           )}
         </div>
       </div>
 
       {errors.date && <p className="text-sm text-red-500">{errors.date}</p>}
+
+      {errors.datetime && (
+        <div className="rounded-md bg-red-50 border border-red-200 p-3 mt-2">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="size-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600">{errors.datetime}</p>
+          </div>
+        </div>
+      )}
+
 
       <div className="space-y-2">
         <Label>Keperluan Peminjaman *</Label>
@@ -1678,10 +1706,42 @@ function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
     facilities: [],
     academicYear: loanService.getAcademicYear(),
     semester: loanService.getSemesterFromDate(new Date()),
+    attachmentUrl: "",
   });
 
   const [facilitySearch, setFacilitySearch] = useState("");
+  const [attachmentFile, setAttachmentFile] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Fungsi untuk membandingkan waktu
+  const isAfter5PM = (timeStr) => {
+    if (!timeStr) return false;
+    const [hours] = timeStr.split(":").map(Number);
+    return hours >= 17;
+  };
+
+  // Fungsi untuk cek apakah hari Sabtu/Minggu
+  const isWeekend = (dateStr) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    const day = date.getDay();
+    return day === 0 || day === 6;
+  };
+
+  // Wajib surat izin jika >= 17:00 ATAU hari Sabtu/Minggu
+  const requiresPermissionLetter = isAfter5PM(formData.endTime) || isWeekend(formData.startDate);
+
+  // Fungsi untuk cek apakah datetime sudah lewat
+  const isPastDateTime = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return false;
+    
+    const now = new Date();
+    const selectedDateTime = new Date(`${dateStr}T${timeStr}`);
+    
+    return selectedDateTime < now;
+  };
 
   const availableFacilities = useMemo(() => {
     return assets.filter(
@@ -1712,8 +1772,67 @@ function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
       newErrors.facilities = "Minimal pilih satu fasilitas";
     }
 
+    // Validasi: tidak bisa pinjam di waktu yang sudah lewat
+    if (formData.startDate && formData.startTime) {
+      if (isPastDateTime(formData.startDate, formData.startTime)) {
+        newErrors.datetime = 
+          "Tidak dapat melakukan peminjaman di waktu yang sudah lewat. Pilih tanggal dan waktu di masa depan.";
+      }
+    }
+
+    // Validasi surat izin untuk peminjaman di atas jam 17:00 atau hari Sabtu/Minggu
+    if (requiresPermissionLetter && !attachmentFile) {
+      newErrors.attachment =
+        "Surat izin wajib dilampirkan untuk peminjaman di atas jam 17:00 atau hari Sabtu/Minggu";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleAttachmentChange = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error(
+        "Format dokumen tidak valid. Gunakan PDF atau gambar (JPG/PNG)."
+      );
+      return;
+    }
+
+    // validasi ukuran file maksimal 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ukuran dokumen maksimal 5MB.");
+      return;
+    }
+
+    // Simpan file untuk diupload nanti saat submit
+    setAttachmentFile(file);
+    setErrors((prev) => ({ ...prev, attachment: "" }));
+
+    // Generate preview untuk semua tipe file
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAttachmentPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else if (file.type === "application/pdf") {
+      // Untuk PDF, tampilkan ikon dengan nama file
+      setAttachmentPreview("pdf");
+    } else {
+      setAttachmentPreview("");
+    }
+
+    toast.success("File berhasil dipilih. Akan diunggah saat mengajukan peminjaman.");
+  };
+
+  const removeAttachment = () => {
+    setAttachmentFile(null);
+    setAttachmentPreview("");
+    setFormData((prev) => ({ ...prev, attachmentUrl: "" }));
   };
 
   const handleSubmit = async (event) => {
@@ -1722,6 +1841,43 @@ function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
     if (!validateForm()) {
       toast.error("Harap perbaiki error di form");
       return;
+    }
+
+    let attachmentUrl = null;
+
+    // Upload file jika ada attachment yang perlu diunggah
+    if (attachmentFile && requiresPermissionLetter) {
+      try {
+        setUploadingAttachment(true);
+        toast.info("Mengunggah surat izin...");
+        
+        const uploadResult = await uploadService.uploadImage(attachmentFile);
+        console.log('📥 Upload result:', uploadResult);
+        
+        // Handle different response formats
+        if (uploadResult.status === "success" && uploadResult.data?.url) {
+          attachmentUrl = uploadResult.data.url;
+          console.log('✅ Got attachment URL:', attachmentUrl);
+          toast.success("Surat izin berhasil diunggah");
+        } else if (uploadResult.data?.status === "success" && uploadResult.data?.data?.url) {
+          // Handle nested response format
+          attachmentUrl = uploadResult.data.data.url;
+          console.log('✅ Got attachment URL (nested):', attachmentUrl);
+          toast.success("Surat izin berhasil diunggah");
+        } else {
+          console.error('❌ Unexpected upload response format:', uploadResult);
+          toast.error("Gagal mengunggah surat izin: format response tidak valid");
+          setUploadingAttachment(false);
+          return;
+        }
+      } catch (error) {
+        console.error("Upload error:", error);
+        toast.error("Gagal mengunggah surat izin: " + error.message);
+        setUploadingAttachment(false);
+        return;
+      } finally {
+        setUploadingAttachment(false);
+      }
     }
 
     const payload = {
@@ -1737,6 +1893,7 @@ function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
       purpose: formData.purpose,
       academicYear: formData.academicYear,
       semester: formData.semester,
+      attachmentUrl: attachmentUrl,
     };
 
     const success = await onSubmit(payload);
@@ -1750,7 +1907,10 @@ function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
         facilities: [],
         academicYear: loanService.getAcademicYear(),
         semester: loanService.getSemesterFromDate(new Date()),
+        attachmentUrl: "",
       });
+      setAttachmentFile(null);
+      setAttachmentPreview("");
       setErrors({});
     }
   };
@@ -1879,10 +2039,27 @@ function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
               handleFieldChange("endTime", event.target.value)
             }
           />
+
+          {requiresPermissionLetter && (
+            <div className="flex items-center gap-2 mt-1 text-amber-600 text-sm">
+              <AlertCircle className="size-4" />
+              <span>Wajib surat izin (weekend atau jam ≥17:00)</span>
+            </div>
+          )}
         </div>
       </div>
 
       {errors.date && <p className="text-sm text-red-500">{errors.date}</p>}
+
+      {errors.datetime && (
+        <div className="rounded-md bg-red-50 border border-red-200 p-3 mt-2">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="size-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600">{errors.datetime}</p>
+          </div>
+        </div>
+      )}
+
 
       <div className="space-y-2">
         <Label>Keperluan Peminjaman *</Label>
@@ -1978,12 +2155,101 @@ function FacilityLoanForm({ assets, onSubmit, onCancel, submitting }) {
         )}
       </div>
 
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="attachment">
+            Surat Izin {requiresPermissionLetter && "(Wajib)"}
+          </Label>
+          {requiresPermissionLetter && (
+            <Badge variant="destructive" className="text-xs">
+              Wajib
+            </Badge>
+          )}
+        </div>
+
+        <div className="text-sm text-muted-foreground mb-2">
+          Format: JPG, PNG, PDF (Maks. 5MB)
+          {requiresPermissionLetter &&
+            " - Wajib diisi untuk peminjaman di atas jam 17:00 atau weekend"}
+        </div>
+
+        {!attachmentFile ? (
+          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:bg-accent/50 transition-colors">
+            <Upload className="mx-auto size-12 text-muted-foreground mb-4" />
+            <div className="mt-4">
+              <Label
+                htmlFor="attachment-upload"
+                className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+              >
+                <Upload className="size-4" />
+                Pilih File
+              </Label>
+              <input
+                id="attachment-upload"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={handleAttachmentChange}
+                className="hidden"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              atau drag and drop file kesini
+            </p>
+          </div>
+        ) : (
+          <div className="border rounded-lg p-4">
+            <div className="flex items-start gap-4">
+              {attachmentPreview === "pdf" ? (
+                <div className="flex-shrink-0 w-20 h-20 bg-red-50 rounded flex items-center justify-center">
+                  <FileText className="size-10 text-red-600" />
+                </div>
+              ) : attachmentPreview ? (
+                <img
+                  src={attachmentPreview}
+                  alt="Preview"
+                  className="w-20 h-20 object-cover rounded"
+                />
+              ) : (
+                <div className="flex-shrink-0 w-20 h-20 bg-muted rounded flex items-center justify-center">
+                  <FileText className="size-10 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex-grow">
+                <p className="font-medium text-sm">{attachmentFile.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(attachmentFile.size / 1024).toFixed(2)} KB
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={removeAttachment}
+                  className="mt-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="mr-1 size-4" />
+                  Hapus Lampiran
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {errors.attachment && (
+          <p className="text-sm text-red-500">{errors.attachment}</p>
+        )}
+      </div>
+
       <div className="flex justify-end gap-3 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Batal
         </Button>
-        <Button type="submit" disabled={submitting}>
-          {submitting ? (
+        <Button type="submit" disabled={submitting || uploadingAttachment}>
+          {uploadingAttachment ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Mengunggah...
+            </>
+          ) : submitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Mengajukan...
