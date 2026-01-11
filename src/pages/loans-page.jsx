@@ -115,7 +115,7 @@ export function LoansPage() {
           console.log('📎 Attachment URLs:', loansWithAttachments.map(l => ({ id: l.id, attachmentUrl: l.attachmentUrl })));
         }
         
-        // Sort loans berdasarkan priority order (sudah dari backend, tapi kita sort lagi untuk memastikan)
+        // Sort loans berdasarkan priority order (udah dari backend, tapi di sort lagi buat mastiin)
         const sortedLoans = [...result.data.loans].sort((a, b) => {
           const priorityOrder = {
             'menunggu': 1,
@@ -442,68 +442,6 @@ export function LoansPage() {
           </div>
         )}
       </header>
-
-      {/* STATISTIK CEPAT */}
-      {/* {canApprove && (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <Card className="border-l-4 border-l-yellow-500">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-yellow-600">{stats.menunggu}</div>
-                <div className="text-sm text-muted-foreground">Menunggu</div>
-                {stats.baru > 0 && (
-                  <div className="text-xs text-green-600 mt-1">({stats.baru} baru)</div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-green-500">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{stats.disetujui}</div>
-                <div className="text-sm text-muted-foreground">Disetujui</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-blue-500">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{stats.menungguPengembalian}</div>
-                <div className="text-sm text-muted-foreground">Menunggu Kembali</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-gray-500">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-600">{stats.selesai}</div>
-                <div className="text-sm text-muted-foreground">Selesai</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-red-500">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">{stats.ditolak}</div>
-                <div className="text-sm text-muted-foreground">Ditolak</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-purple-500">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold">{loans.length}</div>
-                <div className="text-sm text-muted-foreground">Total</div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )} */}
 
       <Card>
         <CardHeader>
@@ -1496,7 +1434,7 @@ if (endDateTime <= startDateTime) {
       </div>
 
       <div className="space-y-3">
-        <Label>Cari Fasilitas Tambahan (Opsional)</Label>
+        <Label>Cari Fasilitas Tambahan (Wajib)</Label>
         <Input
           placeholder="Cari fasilitas..."
           value={facilitySearch}
