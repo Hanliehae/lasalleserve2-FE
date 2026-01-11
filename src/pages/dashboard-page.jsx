@@ -287,8 +287,8 @@ export function DashboardPage() {
       <section className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Aksi Cepat</CardTitle>
-            <CardDescription>Fitur yang sering digunakan</CardDescription>
+            <CardTitle>Fitur yang sering digunakan</CardTitle>
+            {/* <CardDescription>Fitur yang sering digunakan</CardDescription> */}
           </CardHeader>
           <CardContent className="space-y-2">
             {quickActions.map((action) => (
@@ -308,7 +308,7 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>Aktivitas Terbaru</CardTitle>
             <CardDescription>Update terkini sistem</CardDescription>
@@ -329,7 +329,7 @@ export function DashboardPage() {
               </article>
             ))}
           </CardContent>
-        </Card>
+        </Card> */}
       </section>
     </div>
   );
